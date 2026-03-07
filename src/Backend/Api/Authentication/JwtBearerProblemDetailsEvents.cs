@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,12 +17,14 @@ public sealed class JwtBearerProblemDetailsEvents : JwtBearerEvents
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.ContentType = "application/problem+json";
 
-        return context.Response.WriteAsJsonAsync(new ProblemDetails
+        var payload = JsonSerializer.Serialize(new ProblemDetails
         {
             Title = "Unauthorized",
             Status = StatusCodes.Status401Unauthorized,
             Detail = "Authentication failed."
-        }, context.HttpContext.RequestAborted);
+        });
+
+        return context.Response.WriteAsync(payload, context.HttpContext.RequestAborted);
     }
 
     public override Task Forbidden(ForbiddenContext context)
@@ -29,11 +32,13 @@ public sealed class JwtBearerProblemDetailsEvents : JwtBearerEvents
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         context.Response.ContentType = "application/problem+json";
 
-        return context.Response.WriteAsJsonAsync(new ProblemDetails
+        var payload = JsonSerializer.Serialize(new ProblemDetails
         {
             Title = "Forbidden",
             Status = StatusCodes.Status403Forbidden,
             Detail = "Access denied."
-        }, context.HttpContext.RequestAborted);
+        });
+
+        return context.Response.WriteAsync(payload, context.HttpContext.RequestAborted);
     }
 }
