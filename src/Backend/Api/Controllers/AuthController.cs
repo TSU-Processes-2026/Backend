@@ -34,11 +34,7 @@ public sealed class AuthController : ControllerBase
                 Status = StatusCodes.Status409Conflict,
                 Detail = result.ErrorDetail
             }),
-            RegisterAuthStatus.BadRequest => BadRequest(new ValidationProblemDetails(result.Errors ?? new Dictionary<string, string[]>())
-            {
-                Title = "Bad Request",
-                Status = StatusCodes.Status400BadRequest
-            }),
+            RegisterAuthStatus.BadRequest => ValidationProblem(result.Errors ?? new Dictionary<string, string[]>()),
             _ => throw new InvalidOperationException("Unsupported register result status.")
         };
     }
