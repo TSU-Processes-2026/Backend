@@ -14,8 +14,7 @@ public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
+        var databaseProvider = configuration["Database:Provider"];
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -23,7 +22,17 @@ public static class InfrastructureServiceCollectionExtensions
             .Validate(options => options.SigningKey.Length >= 32, "Jwt:SigningKey must be at least 32 characters long.")
             .ValidateOnStart();
 
-        services.AddDbContext<LmsDbContext>(options => options.UseNpgsql(connectionString));
+        if (string.Equals(databaseProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
+        {
+            var databaseName = configuration["Database:InMemoryName"] ?? "lms-tests";
+            services.AddDbContext<LmsDbContext>(options => options.UseInMemoryDatabase(databaseName));
+        }
+        else
+        {
+            var connectionString = configuration.GetConnectionString("DefaultConnection")
+                                   ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
+            services.AddDbContext<LmsDbContext>(options => options.UseNpgsql(connectionString));
+        }
 
         services.AddIdentityCore<ApplicationUser>(options =>
             {

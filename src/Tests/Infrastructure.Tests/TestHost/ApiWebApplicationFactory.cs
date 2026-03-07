@@ -1,22 +1,19 @@
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Infrastructure.Tests.TestHost;
 
-public sealed class ApiWebApplicationFactory : WebApplicationFactory<global::Program>, IDisposable
+public sealed class ApiWebApplicationFactory : WebApplicationFactory<global::Program>
 {
-    private readonly SqliteConnection _connection;
+    private readonly string _databaseName;
 
     public ApiWebApplicationFactory()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
+        _databaseName = $"lms-tests-{Guid.NewGuid():N}";
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -27,7 +24,8 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<global::Pro
         {
             var settings = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=lms_test;Username=lms;Password=lms",
+                ["Database:Provider"] = "InMemory",
+                ["Database:InMemoryName"] = _databaseName,
                 ["Jwt:Issuer"] = "lms-test-issuer",
                 ["Jwt:Audience"] = "lms-test-audience",
                 ["Jwt:SigningKey"] = "01234567890123456789012345678901",
@@ -40,25 +38,10 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<global::Pro
 
         builder.ConfigureServices(services =>
         {
-            services.RemoveAll<DbContextOptions<LmsDbContext>>();
-            services.RemoveAll<LmsDbContext>();
-            services.RemoveAll<SqliteConnection>();
-
-            services.AddSingleton(_connection);
-            services.AddDbContext<LmsDbContext>((serviceProvider, optionsBuilder) =>
-            {
-                optionsBuilder.UseSqlite(serviceProvider.GetRequiredService<SqliteConnection>());
-            });
-
             using var scope = services.BuildServiceProvider().CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LmsDbContext>();
+            dbContext.Database.EnsureDeleted();
             dbContext.Database.EnsureCreated();
         });
-    }
-
-    public new void Dispose()
-    {
-        _connection.Dispose();
-        base.Dispose();
     }
 }
