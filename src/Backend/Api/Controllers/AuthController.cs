@@ -3,6 +3,7 @@ using Application.Auth.Contracts;
 using Application.Auth.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Api.Controllers;
 
@@ -34,7 +35,7 @@ public sealed class AuthController : ControllerBase
                 Status = StatusCodes.Status409Conflict,
                 Detail = result.ErrorDetail
             }),
-            RegisterAuthStatus.BadRequest => ValidationProblem(result.Errors ?? new Dictionary<string, string[]>()),
+            RegisterAuthStatus.BadRequest => ValidationProblem(BuildModelState(result.Errors)),
             _ => throw new InvalidOperationException("Unsupported register result status.")
         };
     }
@@ -103,5 +104,25 @@ public sealed class AuthController : ControllerBase
             Status = StatusCodes.Status401Unauthorized,
             Detail = "Authentication failed."
         };
+    }
+
+    private static ModelStateDictionary BuildModelState(IReadOnlyDictionary<string, string[]>? errors)
+    {
+        var modelState = new ModelStateDictionary();
+
+        if (errors is null)
+        {
+            return modelState;
+        }
+
+        foreach (var pair in errors)
+        {
+            foreach (var error in pair.Value)
+            {
+                modelState.AddModelError(pair.Key, error);
+            }
+        }
+
+        return modelState;
     }
 }
