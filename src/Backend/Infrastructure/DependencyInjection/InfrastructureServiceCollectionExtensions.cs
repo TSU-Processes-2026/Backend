@@ -1,8 +1,10 @@
 using Application.Auth.Contracts;
 using Application.Auth.Options;
+using Application.Users.Contracts;
 using Infrastructure.Auth.Services;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
+using Infrastructure.Users.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -48,6 +50,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUsersService, UsersService>();
 
         return services;
     }
