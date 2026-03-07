@@ -125,6 +125,121 @@ public sealed class SubjectsController : ControllerBase
         };
     }
 
+    [HttpPost("{subjectId:guid}/join")]
+    [ProducesResponseType(typeof(ParticipantResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Join([FromRoute] Guid subjectId, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _subjectsService.JoinAsync(userId.Value, subjectId, cancellationToken);
+
+        return result.Status switch
+        {
+            JoinSubjectStatus.Success => Ok(result.Participant),
+            JoinSubjectStatus.NotFound => NotFound(CreateNotFound()),
+            _ => throw new InvalidOperationException("Unsupported join status.")
+        };
+    }
+
+    [HttpPost("{subjectId:guid}/participants")]
+    [ProducesResponseType(typeof(ParticipantResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> AddParticipant([FromRoute] Guid subjectId, [FromBody] AddParticipantRequest? request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _subjectsService.AddParticipantAsync(userId.Value, subjectId, request ?? new AddParticipantRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            ParticipantMutationStatus.Success => StatusCode(StatusCodes.Status201Created, result.Participant),
+            ParticipantMutationStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported add participant status.")
+        };
+    }
+
+    [HttpGet("{subjectId:guid}/participants")]
+    [ProducesResponseType(typeof(IReadOnlyList<ParticipantResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetParticipants([FromRoute] Guid subjectId, [FromQuery] int limit = 50, [FromQuery] int offset = 0, CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _subjectsService.GetParticipantsAsync(userId.Value, subjectId, limit, offset, cancellationToken);
+
+        return result.Status switch
+        {
+            ParticipantMutationStatus.Success => Ok(result.Participants),
+            ParticipantMutationStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported get participants status.")
+        };
+    }
+
+    [HttpPatch("{subjectId:guid}/participants/{userId:guid}")]
+    [ProducesResponseType(typeof(ParticipantResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateParticipantRole([FromRoute] Guid subjectId, [FromRoute] Guid userId, [FromBody] UpdateParticipantRoleRequest? request, CancellationToken cancellationToken)
+    {
+        var currentUserId = User.GetUserId();
+
+        if (currentUserId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _subjectsService.UpdateParticipantRoleAsync(currentUserId.Value, subjectId, userId, request ?? new UpdateParticipantRoleRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            ParticipantMutationStatus.Success => Ok(result.Participant),
+            ParticipantMutationStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported update participant status.")
+        };
+    }
+
+    [HttpDelete("{subjectId:guid}/participants/{userId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DeleteParticipant([FromRoute] Guid subjectId, [FromRoute] Guid userId, CancellationToken cancellationToken)
+    {
+        var currentUserId = User.GetUserId();
+
+        if (currentUserId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _subjectsService.DeleteParticipantAsync(currentUserId.Value, subjectId, userId, cancellationToken);
+
+        return result.Status switch
+        {
+            ParticipantDeleteStatus.Success => NoContent(),
+            ParticipantDeleteStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported delete participant status.")
+        };
+    }
+
     private static ProblemDetails CreateUnauthorized()
     {
         return new ProblemDetails
