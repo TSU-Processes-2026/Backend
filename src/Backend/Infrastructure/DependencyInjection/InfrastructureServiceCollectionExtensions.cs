@@ -35,8 +35,7 @@ public static class InfrastructureServiceCollectionExtensions
                 options.Password.RequireNonAlphanumeric = false;
             })
             .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<LmsDbContext>()
-            .AddSignInManager();
+            .AddEntityFrameworkStores<LmsDbContext>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IAuthService, AuthService>();
