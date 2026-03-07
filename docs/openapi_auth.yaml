@@ -1,0 +1,185 @@
+openapi: 3.0.1
+info:
+  title: LMS Auth API
+  version: 1.2.0
+servers:
+  - url: /api/auth
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access Token (JWT).
+        Ожидаемые Claims: `sub` (userId), `unique_name` (username), `jti`, `exp`, `iss`, `aud`, `sessionId`.
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: Стандартный формат ошибок ASP.NET Core (RFC 7807)
+      properties:
+        type: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        status: { type: integer, nullable: true }
+        detail: { type: string, nullable: true }
+
+    RegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "ilya_shafranov"
+        password:
+          type: string
+          format: password
+          minLength: 6
+          description: "Сложный пароль. Хешируется на сервере (рекомендуется Argon2id или встроенный алгоритм ASP.NET Core Identity)."
+          example: "StrongP@ssw0rd!"
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "ilya_shafranov"
+        password:
+          type: string
+          format: password
+          example: "StrongP@ssw0rd!"
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          description: Действующий Refresh Token текущей сессии устройства.
+          example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4="
+
+    TokenResponse:
+      type: object
+      required: [tokenType, accessToken, refreshToken, expiresIn, refreshExpiresIn, userId, sessionId]
+      properties:
+        tokenType:
+          type: string
+          description: Тип токена.
+          example: "Bearer"
+        accessToken:
+          type: string
+          description: JWT для доступа к API.
+        refreshToken:
+          type: string
+          description: Одноразовый токен для обновления сессии (подлежит ротации).
+        expiresIn:
+          type: integer
+          description: Время жизни Access Token в секундах (например, 15 минут).
+          example: 900
+        refreshExpiresIn:
+          type: integer
+          description: Время жизни Refresh Token в секундах (например, 7 дней).
+          example: 604800
+        userId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор сессии. Полезен для отображения списка активных устройств в UI пользователя.
+
+    UserResponse:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+
+  responses:
+    BadRequest:
+      description: Bad Request. Ошибка валидации тела запроса (ModelState).
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    Unauthorized:
+      description: Unauthorized. Ошибка аутентификации, токен недействителен, просрочен или отозван.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    Conflict:
+      description: Conflict. Ресурс (например, пользователь с таким именем) уже существует.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+paths:
+  /register:
+    post:
+      tags: [Authentication]
+      summary: Регистрация нового пользователя
+      description: Создает нового пользователя в системе. 
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Created. Пользователь успешно зарегистрирован.
+          content: { application/json: { schema: { $ref: '#/components/schemas/UserResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /login:
+    post:
+      tags: [Authentication]
+      summary: Вход в систему (Аутентификация)
+      description: Проверяет учетные данные и создает новую сессию, возвращая пару Access/Refresh токенов и sessionId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: OK. Успешный вход.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /refresh:
+    post:
+      tags: [Authentication]
+      summary: Обновление токенов (Refresh Token Rotation)
+      description: |
+        Выдает новую пару Access и Refresh токенов. 
+        **Поведение:** При успешном запросе переданный Refresh Token помечается как использованный (инвалидируется). Если злоумышленник попытается использовать старый (уже примененный) Refresh Token, сервер должен вернуть 401 и отозвать всю цепочку токенов (закрыть сессию `sessionId`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshTokenRequest' }
+      responses:
+        '200':
+          description: OK. Токены успешно обновлены.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TokenResponse' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /logout:
+    post:
+      tags: [Authentication]
+      summary: Выход из системы (Отзыв токена текущего устройства)
+      description: |
+        Инвалидирует **только переданный** в запросе Refresh Token (отвязывает конкретную сессию `sessionId`). 
+        Остальные сессии пользователя на других устройствах остаются активными. Требует авторизации по Access токену.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshTokenRequest' }
+      responses:
+        '204':
+          description: No Content. Успешный выход (текущая сессия завершена).
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
