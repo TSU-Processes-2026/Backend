@@ -6,4 +6,5 @@ public sealed class Subject
     public required string Title { get; set; }
     public required string Description { get; set; }
     public required ICollection<SubjectParticipant> Participants { get; set; } = new List<SubjectParticipant>();
+    public ICollection<Post> Posts { get; set; } = new List<Post>();
 }
