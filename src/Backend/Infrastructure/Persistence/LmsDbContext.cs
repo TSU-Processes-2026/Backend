@@ -17,6 +17,7 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Subject> Subjects => Set<Subject>();
     public DbSet<SubjectParticipant> SubjectParticipants => Set<SubjectParticipant>();
+    public DbSet<Post> Posts => Set<Post>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
