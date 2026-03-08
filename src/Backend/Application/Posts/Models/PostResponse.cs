@@ -5,6 +5,7 @@ namespace Application.Posts.Models;
 [JsonPolymorphic]
 [JsonDerivedType(typeof(AnnouncementPostResponse))]
 [JsonDerivedType(typeof(MaterialPostResponse))]
+[JsonDerivedType(typeof(AssignmentPostResponse))]
 public abstract class PostResponse
 {
     public required Guid Id { get; init; }

@@ -10,6 +10,7 @@ public sealed class PostsService : IPostsService
 {
     private const string AnnouncementPostType = "Announcement";
     private const string MaterialPostType = "Material";
+    private const string AssignmentPostType = "Assignment";
     private const string TeacherRole = "Teacher";
     private const string AdminRole = "Admin";
 
@@ -31,10 +32,13 @@ public sealed class PostsService : IPostsService
 
         var safeLimit = limit <= 0 ? 20 : limit;
         var safeOffset = offset < 0 ? 0 : offset;
-        var normalizedPostType = NormalizePostType(postType);
+        var normalizedPostType = NormalizePostTypeForList(postType);
 
-        var query = _dbContext.Posts.AsQueryable();
-        query = query.Where(x => x.SubjectId == subjectId);
+        var query = _dbContext.Posts
+            .Where(x => x.SubjectId == subjectId)
+            .Include(x => x.Questions)
+            .ThenInclude(x => x.Options)
+            .AsQueryable();
 
         if (normalizedPostType is not null)
         {
@@ -54,6 +58,8 @@ public sealed class PostsService : IPostsService
     public async Task<PostAccessResult> GetByIdAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken)
     {
         var post = await _dbContext.Posts
+            .Include(x => x.Questions)
+            .ThenInclude(x => x.Options)
             .SingleOrDefaultAsync(x => x.Id == postId, cancellationToken);
 
         if (post is null)
@@ -76,7 +82,7 @@ public sealed class PostsService : IPostsService
             return PostUpdateResult.Forbidden();
         }
 
-        var normalizedPostType = NormalizePostType(request.PostType);
+        var normalizedPostType = NormalizePostTypeForCreate(request.PostType);
 
         if (normalizedPostType is null)
         {
@@ -111,6 +117,8 @@ public sealed class PostsService : IPostsService
     public async Task<PostUpdateResult> UpdateAsync(Guid currentUserId, Guid postId, UpdatePostRequest request, CancellationToken cancellationToken)
     {
         var post = await _dbContext.Posts
+            .Include(x => x.Questions)
+            .ThenInclude(x => x.Options)
             .SingleOrDefaultAsync(x => x.Id == postId, cancellationToken);
 
         if (post is null)
@@ -171,7 +179,27 @@ public sealed class PostsService : IPostsService
                 cancellationToken);
     }
 
-    private static string? NormalizePostType(string? postType)
+    private static string? NormalizePostTypeForList(string? postType)
+    {
+        if (string.Equals(postType, AnnouncementPostType, StringComparison.Ordinal))
+        {
+            return AnnouncementPostType;
+        }
+
+        if (string.Equals(postType, MaterialPostType, StringComparison.Ordinal))
+        {
+            return MaterialPostType;
+        }
+
+        if (string.Equals(postType, AssignmentPostType, StringComparison.Ordinal))
+        {
+            return AssignmentPostType;
+        }
+
+        return null;
+    }
+
+    private static string? NormalizePostTypeForCreate(string? postType)
     {
         if (string.Equals(postType, AnnouncementPostType, StringComparison.Ordinal))
         {
@@ -212,6 +240,37 @@ public sealed class PostsService : IPostsService
                 FileName = post.FileName ?? string.Empty,
                 StoragePath = post.StoragePath ?? string.Empty,
                 FileSize = post.FileSize ?? 0
+            };
+        }
+
+        if (post.PostType == AssignmentPostType)
+        {
+            return new AssignmentPostResponse
+            {
+                Id = post.Id,
+                SubjectId = post.SubjectId,
+                AuthorId = post.AuthorId,
+                PostType = AssignmentPostType,
+                Content = post.Content,
+                CreatedAt = post.CreatedAt,
+                AssignmentData = post.AssignmentData ?? string.Empty,
+                Questions = post.Questions
+                    .OrderBy(x => x.Id)
+                    .Select(x => new AssignmentPostQuestionResponse
+                    {
+                        Id = x.Id,
+                        QuestionType = x.QuestionType,
+                        QuestionData = x.QuestionData,
+                        Options = x.Options
+                            .OrderBy(y => y.Id)
+                            .Select(y => new AssignmentPostQuestionOptionResponse
+                            {
+                                Id = y.Id,
+                                Text = y.Text
+                            })
+                            .ToList()
+                    })
+                    .ToList()
             };
         }
 
