@@ -11,5 +11,7 @@ public sealed class Post
     public string? FileName { get; set; }
     public string? StoragePath { get; set; }
     public long? FileSize { get; set; }
+    public string? AssignmentData { get; set; }
     public required Subject Subject { get; set; }
+    public ICollection<AssignmentQuestion> Questions { get; set; } = new List<AssignmentQuestion>();
 }

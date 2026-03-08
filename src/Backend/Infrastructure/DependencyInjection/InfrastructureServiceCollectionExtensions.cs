@@ -1,8 +1,10 @@
+using Application.Assignments.Contracts;
 using Application.Auth.Contracts;
 using Application.Auth.Options;
 using Application.Posts.Contracts;
 using Application.Subjects.Contracts;
 using Application.Users.Contracts;
+using Infrastructure.Assignments.Services;
 using Infrastructure.Auth.Services;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
@@ -56,6 +58,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ISubjectsService, SubjectsService>();
         services.AddScoped<IPostsService, PostsService>();
+        services.AddScoped<IAssignmentsService, AssignmentsService>();
         services.AddScoped<IUsersService, UsersService>();
 
         return services;
