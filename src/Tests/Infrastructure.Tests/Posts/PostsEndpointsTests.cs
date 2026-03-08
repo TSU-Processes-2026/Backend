@@ -153,22 +153,62 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
         material.TryGetProperty("fileSize", out _).Should().BeTrue();
     }
 
-    [Fact(Skip = "TODO: Для написания необходим Assignment")]
-    public async Task CreatePost_ShouldReturnCreatedAssignment_WhenPostTypeIsAssignmentAndPayloadIsValid()
+    [Fact]
+    public async Task GetPosts_ShouldReturnFilteredAssignments_WhenPostTypeIsAssignment()
     {
-        throw new NotImplementedException();
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+
+        await CreatePostAsync(owner.AccessToken, subjectId, "Announcement", "Announcement body");
+        await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId, "Assignment body", "Assignment data");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/subjects/{subjectId}/posts?postType=Assignment");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetArrayLength().Should().Be(1);
+        payload[0].GetProperty("postType").GetString().Should().Be("Assignment");
+        payload[0].TryGetProperty("assignmentData", out _).Should().BeTrue();
+        payload[0].TryGetProperty("questions", out _).Should().BeTrue();
     }
 
-    [Fact(Skip = "TODO: Для написания необходим Assignment")]
+    [Fact]
     public async Task GetPosts_ShouldContainAssignmentShape_WhenAssignmentPostExists()
     {
-        throw new NotImplementedException();
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+
+        await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId, "Assignment post", "Assignment payload");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/subjects/{subjectId}/posts");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var assignment = payload.EnumerateArray().Single(x => x.GetProperty("postType").GetString() == "Assignment");
+
+        assignment.GetProperty("subjectId").GetString().Should().Be(subjectId);
+        assignment.GetProperty("assignmentData").GetString().Should().Be("Assignment payload");
+        assignment.GetProperty("questions").GetArrayLength().Should().Be(1);
     }
 
-    [Fact(Skip = "TODO: Для написания необходим Assignment")]
+    [Fact]
     public async Task GetPostById_ShouldReturnAssignment_WhenPostIsAssignment()
     {
-        throw new NotImplementedException();
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId, "Assignment post", "Assignment payload");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/posts/{assignmentId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetProperty("id").GetString().Should().Be(assignmentId);
+        payload.GetProperty("postType").GetString().Should().Be("Assignment");
+        payload.GetProperty("assignmentData").GetString().Should().Be("Assignment payload");
+        payload.GetProperty("questions").GetArrayLength().Should().Be(1);
     }
     [Fact]
     public async Task GetPostById_ShouldReturnPost_WhenRequesterIsParticipant()
@@ -496,8 +536,41 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
         return await _client.PostAsync($"/api/subjects/{subjectId}/posts", form);
     }
 
+    private static object CreateAssignmentRequest(string content, string assignmentData)
+    {
+        return new
+        {
+            content,
+            assignmentData,
+            questions = new[]
+            {
+                new
+                {
+                    id = Guid.NewGuid(),
+                    questionType = "Text",
+                    questionData = "Explain your answer"
+                }
+            }
+        };
+    }
+
+    private async Task<string> CreateAssignmentAndGetIdAsync(string accessToken, string subjectId, string content, string assignmentData)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _client.PostAsJsonAsync($"/api/subjects/{subjectId}/assignments", CreateAssignmentRequest(content, assignmentData));
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var assignmentId = payload.GetProperty("id").GetString();
+        assignmentId.Should().NotBeNullOrWhiteSpace();
+        return assignmentId!;
+    }
     private sealed record AuthUser(string UserId, string AccessToken);
 }
+
+
+
 
 
 
