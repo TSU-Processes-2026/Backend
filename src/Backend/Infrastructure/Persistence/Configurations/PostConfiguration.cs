@@ -25,9 +25,17 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
+        builder.Property(x => x.AssignmentData)
+            .IsRequired(false);
+
         builder.HasOne(x => x.Subject)
             .WithMany(x => x.Posts)
             .HasForeignKey(x => x.SubjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Questions)
+            .WithOne(x => x.Assignment)
+            .HasForeignKey(x => x.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne<ApplicationUser>()
