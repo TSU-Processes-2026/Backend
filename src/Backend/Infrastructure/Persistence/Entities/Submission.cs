@@ -19,5 +19,7 @@ namespace Infrastructure.Persistence.Entities
         public SubmissionStatusEnum status { get; set; }
 
         public DateTime submittedAt { get; set; }
+        [JsonIgnore]
+        public Grade grade { get; set; }
     }
 }

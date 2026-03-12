@@ -5,10 +5,10 @@ using Infrastructure.Persistence.Entities;
 namespace Api.Controllers
 {
     [ApiController]
-    [Route("api/assignments")]
+    [Route("api")]
     public class SubmissionsController : Controller
     {
-        [HttpPost("{assignmentId}/submissions")]
+        [HttpPost("assignments/{assignmentId}/submissions")]
         public IActionResult CreateSubmission(
             Guid assignmentId,
             [FromBody] SubmissionCreateRequest request,
@@ -42,7 +42,7 @@ namespace Api.Controllers
             return Created($"/api/submissions/{submission.id}", submission);
         }
 
-        [HttpGet("{assignmentId}/submissions")]
+        [HttpGet("assignments/{assignmentId}/submissions")]
         public IActionResult GetSubmissions(
             Guid assignmentId,
             [FromQuery] int limit = 20,
@@ -75,7 +75,7 @@ namespace Api.Controllers
             return Ok(result);
         }
 
-        [HttpGet("/api/submissions/{submissionId}")]
+        [HttpGet("submissions/{submissionId}")]
         public IActionResult GetSubmission(Guid submissionId)
         {
             var submission = new Submission
@@ -111,7 +111,7 @@ namespace Api.Controllers
             return Ok(submission);
         }
 
-        [HttpPatch("/api/submissions/{submissionId}")]
+        [HttpPatch("submissions/{submissionId}")]
         public IActionResult PatchSubmission(Guid submissionId, [FromBody] SubmissionCreateRequest request)
         {
             var submission = new Submission
@@ -135,7 +135,7 @@ namespace Api.Controllers
             return Ok(submission);
         }
 
-        [HttpPost("/api/submissions/{submissionId}/submit")]
+        [HttpPost("submissions/{submissionId}/submit")]
         public IActionResult SubmitSubmission(Guid submissionId)
         {
             var submission = new Submission
@@ -170,7 +170,7 @@ namespace Api.Controllers
 
             return Ok(submission);
         }
-        [HttpPost("/api/submissions/{submissionId}/withdraw")]
+        [HttpPost("submissions/{submissionId}/withdraw")]
         public IActionResult WithdrawSubmission(Guid submissionId)
         {
             var submission = new Submission
@@ -178,7 +178,7 @@ namespace Api.Controllers
                 id = submissionId,
                 assignmentId = Guid.NewGuid(),
                 authorId = Guid.NewGuid(),
-                status = SubmissionStatusEnum.Graded,
+                status = SubmissionStatusEnum.Draft,
                 submittedAt = DateTime.UtcNow,
                 answers = new List<AnswerItem>
                 {
