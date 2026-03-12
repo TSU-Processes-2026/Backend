@@ -208,6 +208,36 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         updated.status.Should().Be(SubmissionStatusEnum.Draft);
     }
 
+    [Fact]
+    public async Task SubmitSubmission_ShouldChangeStatusToRequiresReview()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+
+        await JoinSubjectAsync(owner.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status.Should().Be(SubmissionStatusEnum.Draft);
+
+        var submitResponse = await _client.PostAsync($"/api/submissions/{submission.id}/submit", null);
+        submitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updatedSubmission = await submitResponse.Content.ReadFromJsonAsync<Submission>();
+        updatedSubmission!.status.Should().Be(SubmissionStatusEnum.RequiresReview);
+    }
+
     private static SubmissionCreateRequest CreateSubmissionRequest()
     {
         return new SubmissionCreateRequest

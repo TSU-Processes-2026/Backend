@@ -128,6 +128,42 @@ namespace Api.Controllers
                         assignmentQuestionId = Guid.NewGuid(),
                         answerType = AnswerTypeEnum.TextAnswer,
                         text = "Updated answer"
+                    }   
+                }
+            };
+
+            return Ok(submission);
+        }
+
+        [HttpPost("/api/submissions/{submissionId}/submit")]
+        public IActionResult SubmitSubmission(Guid submissionId)
+        {
+            var submission = new Submission
+            {
+                id = submissionId,
+                assignmentId = Guid.NewGuid(),
+                authorId = Guid.NewGuid(),
+                status = SubmissionStatusEnum.RequiresReview,
+                submittedAt = DateTime.UtcNow,
+                answers = new List<AnswerItem>
+                {
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.SingleChoiceAnswer,
+                        selectedOptionId = Guid.NewGuid()
+                    },
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.MultipleChoiceAnswer,
+                        selectedOptionsId = new List<Guid> { Guid.NewGuid() }
+                    },
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.TextAnswer,
+                        text = "Some answer"
                     }
                 }
             };
