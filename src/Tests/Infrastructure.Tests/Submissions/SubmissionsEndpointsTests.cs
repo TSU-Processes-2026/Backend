@@ -238,6 +238,77 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         updatedSubmission!.status.Should().Be(SubmissionStatusEnum.RequiresReview);
     }
 
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnDraft_WhenAuthorAndStatusIsRequiresReview()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", author.AccessToken);
+        await JoinSubjectAsync(author.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", createRequest);
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status = SubmissionStatusEnum.RequiresReview;
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<Submission>();
+        updated!.status.Should().Be(SubmissionStatusEnum.Draft);
+    }
+
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnForbidden_WhenNotAuthor()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var otherUser = await RegisterAndLoginAsync($"other_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", otherUser.AccessToken);
+        await JoinSubjectAsync(otherUser.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        submission!.authorId.Should().NotBe(otherUser.UserId);
+
+        submission.status = SubmissionStatusEnum.RequiresReview;
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnForbidden_WhenStatusIsGraded()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", author.AccessToken);
+        await JoinSubjectAsync(author.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", createRequest);
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status = SubmissionStatusEnum.Graded;
+
+        submission.status.Should().Be(SubmissionStatusEnum.Graded);
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     private static SubmissionCreateRequest CreateSubmissionRequest()
     {
         return new SubmissionCreateRequest

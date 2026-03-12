@@ -170,5 +170,41 @@ namespace Api.Controllers
 
             return Ok(submission);
         }
+        [HttpPost("/api/submissions/{submissionId}/withdraw")]
+        public IActionResult WithdrawSubmission(Guid submissionId)
+        {
+            var submission = new Submission
+            {
+                id = submissionId,
+                assignmentId = Guid.NewGuid(),
+                authorId = Guid.NewGuid(),
+                status = SubmissionStatusEnum.Graded,
+                submittedAt = DateTime.UtcNow,
+                answers = new List<AnswerItem>
+                {
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.SingleChoiceAnswer,
+                        selectedOptionId = Guid.NewGuid()
+                    },
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.MultipleChoiceAnswer,
+                        selectedOptionsId = new List<Guid> { Guid.NewGuid() }
+                    },
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.TextAnswer,
+                        text = "Some answer"
+                    }
+                }
+            };
+
+            return Ok(submission);
+        }
+
     }
 }
