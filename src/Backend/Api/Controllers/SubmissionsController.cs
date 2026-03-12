@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Application.Submissions.Models;
+using Infrastructure.Persistence.Entities;
 
 namespace Api.Controllers
 {
@@ -7,35 +8,15 @@ namespace Api.Controllers
     [Route("api/assignments")]
     public class SubmissionsController : Controller
     {
-        private Application.Submissions.Models.ProblemDetails _problemDetails;
-
-        public SubmissionsController()
-        {
-        }
         [HttpPost("{assignmentId}/submissions")]
-        public IActionResult CreateSubmission(Guid assignmentId, SubmissionCreateRequest submissionCreateRequest, bool? isStudent)
+        public IActionResult CreateSubmission(
+            Guid assignmentId,
+            [FromBody] SubmissionCreateRequest request,
+            [FromQuery] bool? isStudent)
         {
-
-            if (isStudent != null)
+            if (isStudent == false)
             {
-                if ((bool)isStudent)
-                {
-                    var submissionTest = new Submission
-                    {
-                        id = Guid.NewGuid(),
-                        assignmentId = assignmentId,
-                        authorId = Guid.NewGuid(),
-                        answers = submissionCreateRequest.answers,
-                        status = SubmissionStatusEnum.Draft,
-                        submittedAt = DateTime.UtcNow
-                    };
-
-                    return Created("", submissionTest);
-                }
-                else
-                {
-                    return Forbid();
-                }
+                return Forbid();
             }
 
             var submission = new Submission
@@ -43,12 +24,36 @@ namespace Api.Controllers
                 id = Guid.NewGuid(),
                 assignmentId = assignmentId,
                 authorId = Guid.NewGuid(),
-                answers = submissionCreateRequest.answers,
+                answers = request.answers,
                 status = SubmissionStatusEnum.Draft,
                 submittedAt = DateTime.UtcNow
             };
 
-            return Created("", submission);
+            return Created($"/api/submissions/{submission.id}", submission);
+        }
+
+        [HttpGet("/api/submissions/{submissionId}")]
+        public IActionResult GetSubmission(
+            Guid submissionId,
+            [FromQuery] bool? isAuthor,
+            [FromQuery] bool? isTeacher)
+        {
+            if (isAuthor != true && isTeacher != true)
+            {
+                return Forbid();
+            }
+
+            var submission = new Submission
+            {
+                id = submissionId,
+                assignmentId = Guid.NewGuid(),
+                authorId = Guid.NewGuid(),
+                answers = new List<AnswerItem>(),
+                status = SubmissionStatusEnum.Draft,
+                submittedAt = DateTime.UtcNow
+            };
+
+            return Ok(submission);
         }
     }
 }

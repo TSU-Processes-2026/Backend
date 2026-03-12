@@ -27,7 +27,7 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
             new AuthenticationHeaderValue("Bearer", owner.AccessToken);
 
         var subjectId = await CreateSubjectAsync(owner.AccessToken, "Test", "Test");
-        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);//post
 
         var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
 
@@ -69,6 +69,9 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+
+
     private static object CreateSubmissionRequest()
     {
         return new
