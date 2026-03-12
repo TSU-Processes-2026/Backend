@@ -6,7 +6,7 @@ namespace Application.Submissions.Models
 {
     public class SubmissionCreateRequest
     {
-        public List<AnswerItem> answers { get; set; }
+        public List<AnswerItemDto> answers { get; set; }
 
     }
 }

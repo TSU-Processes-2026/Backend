@@ -1,5 +1,6 @@
 ﻿using Application.Submissions.Models;
 using FluentAssertions;
+using Infrastructure.Persistence.Entities;
 using Infrastructure.Tests.TestHost;
 using System.Net;
 using System.Net.Http.Headers;
@@ -70,7 +71,55 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task GetSubmissions_ShouldReturnOk_WhenUserIsTeacher()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
 
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var teacher = await RegisterAndLoginAsync($"teacher_{Guid.NewGuid():N}");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", teacher.AccessToken);
+
+        await JoinSubjectAsync(teacher.AccessToken, subjectId, "Teacher");
+
+        var response =
+            await _client.GetAsync($"/api/assignments/{assignmentId}/submissions?limit=20&offset=0");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetSubmission_ShouldReturnOk()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
+        var request = CreateSubmissionRequest();
+        var createResponse =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request);
+
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        // Получаем конкретный submission по id
+        var response = await _client.GetAsync($"/api/submissions/{createdSubmission!.id}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var submission = await response.Content.ReadFromJsonAsync<Submission>();
+        submission!.id.Should().Be(createdSubmission.id);
+    }
 
     private static object CreateSubmissionRequest()
     {

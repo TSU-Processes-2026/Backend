@@ -22,6 +22,7 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<AssignmentQuestion> AssignmentQuestions => Set<AssignmentQuestion>();
     public DbSet<AssignmentQuestionOption> AssignmentQuestionOptions => Set<AssignmentQuestionOption>();
     public DbSet<Submission> Submissions => Set<Submission>();
+    public DbSet<AnswerItem> AnswerItems => Set<AnswerItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
