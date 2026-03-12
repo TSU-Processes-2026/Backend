@@ -40,7 +40,7 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", student.AccessToken);
 
-        var request = CreateSubmissionRequest();
+        SubmissionCreateRequest request = CreateSubmissionRequest();
 
         var response =
             await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request);
@@ -63,7 +63,7 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
 
         await JoinSubjectAsync(teacher.AccessToken, subjectId, "Teacher");
 
-        var request = CreateSubmissionRequest();
+        SubmissionCreateRequest request = CreateSubmissionRequest();
 
         var response =
             await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=false", request);
@@ -106,7 +106,7 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
 
         await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
 
-        var request = CreateSubmissionRequest();
+        SubmissionCreateRequest request = CreateSubmissionRequest();
         var createResponse =
             await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request);
 
@@ -121,27 +121,83 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         submission!.id.Should().Be(createdSubmission.id);
     }
 
-    private static object CreateSubmissionRequest()
+    [Fact]
+    public async Task PatchSubmission_ShouldReturnForbidden_WhenStatusIsNotDraft()
     {
-        return new
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync("/api/assignments/11111111-1111-1111-1111-111111111111/submissions", createRequest);
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status = SubmissionStatusEnum.Graded;
+
+        var patchRequest = new SubmissionCreateRequest
         {
-            answers = new object[]
-            {
-                new
+            answers = new List<AnswerItemDto>
                 {
-                    questionId = Guid.NewGuid(),
+                    new AnswerItemDto
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.TextAnswer,
+                        text = "Updated answer"
+                    }
+                }
+        };
+
+        var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{submission.id}", patchRequest);
+        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task PatchSubmission_ShouldUpdateAnswers_WhenStatusIsDraft()
+    {
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync("/api/assignments/11111111-1111-1111-1111-111111111111/submissions", createRequest);
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        var patchRequest = new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+                {
+                    new AnswerItemDto
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.TextAnswer,
+                        text = "Updated answer"
+                    }
+                }
+        };
+
+        var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{createdSubmission!.id}", patchRequest);
+        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await patchResponse.Content.ReadFromJsonAsync<Submission>();
+        updated!.answers.Should().ContainSingle(a => a.text == "Updated answer");
+    }
+
+    private static SubmissionCreateRequest CreateSubmissionRequest()
+    {
+        return new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+            {
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
                     answerType = AnswerTypeEnum.SingleChoiceAnswer,
                     selectedOptionId = Guid.NewGuid()
                 },
-                new
+                new AnswerItemDto
                 {
-                    questionId = Guid.NewGuid(),
+                    assignmentQuestionId = Guid.NewGuid(),
                     answerType = AnswerTypeEnum.MultipleChoiceAnswer,
-                    selectedOptionIds = new[] { Guid.NewGuid() }
+                    selectedOptionIds = new List<Guid> { Guid.NewGuid() }
                 },
-                new
+                new AnswerItemDto
                 {
-                    questionId = Guid.NewGuid(),
+                    assignmentQuestionId = Guid.NewGuid(),
                     answerType = AnswerTypeEnum.TextAnswer,
                     text = "My answer"
                 }

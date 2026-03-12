@@ -111,6 +111,28 @@ namespace Api.Controllers
             return Ok(submission);
         }
 
+        [HttpPatch("/api/submissions/{submissionId}")]
+        public IActionResult PatchSubmission(Guid submissionId, [FromBody] SubmissionCreateRequest request)
+        {
+            var submission = new Submission
+            {
+                id = submissionId,
+                assignmentId = Guid.NewGuid(),
+                authorId = Guid.NewGuid(),
+                status = SubmissionStatusEnum.Draft,
+                submittedAt = DateTime.UtcNow,
+                answers = new List<AnswerItem>
+                {
+                    new AnswerItem
+                    {
+                        assignmentQuestionId = Guid.NewGuid(),
+                        answerType = AnswerTypeEnum.TextAnswer,
+                        text = "Updated answer"
+                    }
+                }
+            };
 
+            return Ok(submission);
+        }
     }
 }
