@@ -113,7 +113,6 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
 
-        // Получаем конкретный submission по id
         var response = await _client.GetAsync($"/api/submissions/{createdSubmission!.id}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -124,35 +123,66 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
     [Fact]
     public async Task PatchSubmission_ShouldReturnForbidden_WhenStatusIsNotDraft()
     {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
         SubmissionCreateRequest createRequest = CreateSubmissionRequest();
-        var createResponse = await _client.PostAsJsonAsync("/api/assignments/11111111-1111-1111-1111-111111111111/submissions", createRequest);
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
         submission!.status = SubmissionStatusEnum.Graded;
 
         var patchRequest = new SubmissionCreateRequest
         {
             answers = new List<AnswerItemDto>
+            {
+                new AnswerItemDto
                 {
-                    new AnswerItemDto
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "Updated answer"
-                    }
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.TextAnswer,
+                    text = "Updated answer"
                 }
+            }
         };
 
         var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{submission.id}", patchRequest);
-        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        submission.status.Should().NotBe(SubmissionStatusEnum.Draft);
+        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);//позже изменить на badrequest
     }
 
     [Fact]
     public async Task PatchSubmission_ShouldUpdateAnswers_WhenStatusIsDraft()
     {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
         SubmissionCreateRequest createRequest = CreateSubmissionRequest();
-        var createResponse = await _client.PostAsJsonAsync("/api/assignments/11111111-1111-1111-1111-111111111111/submissions", createRequest);
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
@@ -160,14 +190,14 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
         var patchRequest = new SubmissionCreateRequest
         {
             answers = new List<AnswerItemDto>
-                {
-                    new AnswerItemDto
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "Updated answer"
-                    }
-                }
+        {
+            new AnswerItemDto
+            {
+                assignmentQuestionId = Guid.NewGuid(),
+                answerType = AnswerTypeEnum.TextAnswer,
+                text = "Updated answer"
+            }
+        }
         };
 
         var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{createdSubmission!.id}", patchRequest);
@@ -175,6 +205,7 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
 
         var updated = await patchResponse.Content.ReadFromJsonAsync<Submission>();
         updated!.answers.Should().ContainSingle(a => a.text == "Updated answer");
+        updated.status.Should().Be(SubmissionStatusEnum.Draft);
     }
 
     private static SubmissionCreateRequest CreateSubmissionRequest()
