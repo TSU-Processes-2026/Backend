@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Application.Grades.Models;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
 {
@@ -7,9 +8,33 @@ namespace Api.Controllers
     public class GradesController : ControllerBase
     {
         [HttpGet]
-        public IActionResult CreateGrade(Guid submissionId)
+        public IActionResult GetGrade(Guid submissionId)
         {
-            return Ok();
+            GradeDto gradeDto = new GradeDto
+            {
+                id = submissionId,
+                score = 4,
+                submissionId = submissionId,
+                verdictedAt = DateTime.Now,
+                verdictText = "string"
+            };
+
+            return Ok(gradeDto);
+        }
+
+        [HttpPost]
+        public IActionResult CreateGrade(Guid submissionId, [FromBody] object request)
+        {
+            GradeDto gradeDto = new GradeDto
+            {
+                id = submissionId,
+                score = 4,
+                submissionId = submissionId,
+                verdictedAt = DateTime.Now,
+                verdictText = "string"
+            };
+
+            return Ok(gradeDto);
         }
     }
 }
