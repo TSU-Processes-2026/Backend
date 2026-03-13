@@ -47,7 +47,7 @@ public class SubmissionsController : Controller
             return Forbid();
 
         var submissions = await _submissionsService.GetSubmissions(assignmentId, limit, offset);
-        return Ok(submissions); // GetSubmissions возвращает List<SubmissionDto>, можно оставить как есть
+        return Ok(submissions);
     }
 
     [HttpGet("submissions/{submissionId}")]
