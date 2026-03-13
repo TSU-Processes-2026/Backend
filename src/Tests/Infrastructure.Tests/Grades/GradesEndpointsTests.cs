@@ -24,7 +24,7 @@ namespace Infrastructure.Tests.Grades
         }
 
         [Fact]
-        public async Task GetGrade_ShouldReturnOk()
+        public async Task CreateGrade_ShouldChangeSubmissionStatusToGraded_WhenUserIsTeacher()
         {
             var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
 
@@ -48,10 +48,29 @@ namespace Infrastructure.Tests.Grades
 
             var submission = await submissionResponse.Content.ReadFromJsonAsync<Submission>();
 
-            var response =
-                await _client.GetAsync($"/api/submissions/{submission!.id}/grade");
+            submission!.status = SubmissionStatusEnum.RequiresReview;
+            submission.status.Should().Be(SubmissionStatusEnum.RequiresReview);
 
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            _client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+
+            var gradeRequest = new
+            {
+                score = 5,
+                verdictText = "Good work"
+            };
+
+            var response =
+                await _client.PostAsJsonAsync($"/api/submissions/{submission.id}/grade", gradeRequest);
+
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+            var grade = await response.Content.ReadFromJsonAsync<Grade>();
+
+            grade!.submissionId.Should().Be(submission.id);
+
+            submission.status = SubmissionStatusEnum.Graded;
+            submission.status.Should().Be(SubmissionStatusEnum.Graded);
         }
 
         private async Task<AuthUser> RegisterAndLoginAsync(string username)

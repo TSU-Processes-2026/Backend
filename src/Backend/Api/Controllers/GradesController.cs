@@ -1,4 +1,5 @@
 ﻿using Application.Grades.Models;
+using Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
@@ -19,7 +20,7 @@ namespace Api.Controllers
                 verdictText = "string"
             };
 
-            return Ok(gradeDto);
+            return Created($"/api/submissions/{gradeDto.id}", gradeDto);
         }
 
         [HttpPost]
