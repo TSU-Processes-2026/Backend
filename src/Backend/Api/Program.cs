@@ -9,6 +9,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
+builder.Services.AddScoped<Application.Submissions.Contracts.ISubmissionsService, Infrastructure.Submissions.Services.SubmissionsService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))

@@ -1,210 +1,110 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Application.Submissions.Contracts;
 using Application.Submissions.Models;
-using Infrastructure.Persistence.Entities;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
-namespace Api.Controllers
+[ApiController]
+[Route("api")]
+public class SubmissionsController : Controller
 {
-    [ApiController]
-    [Route("api")]
-    public class SubmissionsController : Controller
+    private readonly ISubmissionsService _submissionsService;
+
+    public SubmissionsController(ISubmissionsService submissionsService)
     {
-        [HttpPost("assignments/{assignmentId}/submissions")]
-        public IActionResult CreateSubmission(
-            Guid assignmentId,
-            [FromBody] SubmissionCreateRequest request,
-            [FromQuery] bool? isStudent)
-        {
-            if (isStudent == false)
-            {
-                return Forbid();
-            }
+        _submissionsService = submissionsService;
+    }
 
-            var answers = request.answers.Select(a => new AnswerItem
-            {
-                id = a.id,
-                assignmentQuestionId = a.assignmentQuestionId,
-                answerType = a.answerType,
-                selectedOptionId = a.selectedOptionId,
-                selectedOptionsId = a.selectedOptionIds,
-                text = a.text
-            }).ToList();
+    [HttpPost("assignments/{assignmentId}/submissions")]
+    public async Task<IActionResult> CreateSubmission(
+        Guid assignmentId,
+        [FromBody] SubmissionCreateRequest request,
+        [FromQuery] bool? isStudent)
+    {
+        if (isStudent == false)
+            return Forbid();
 
-            var submission = new Submission
-            {
-                id = Guid.NewGuid(),
-                assignmentId = assignmentId,
-                authorId = Guid.NewGuid(),
-                answers = answers,
-                status = SubmissionStatusEnum.Draft,
-                submittedAt = DateTime.UtcNow
-            };
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            return Created($"/api/submissions/{submission.id}", submission);
-        }
+        var result = await _submissionsService.CreateSubmission(assignmentId, userId, request);
 
-        [HttpGet("assignments/{assignmentId}/submissions")]
-        public IActionResult GetSubmissions(
-            Guid assignmentId,
-            [FromQuery] int limit = 20,
-            [FromQuery] int offset = 0,
-            [FromQuery] bool? isTeacher = true)
-        {
-            if (isTeacher != true)
-            {
-                return Forbid();
-            }
+        if (result.Status == SubmissionAccessStatus.NotFound)
+            return NotFound();
 
-            var submissions = new List<Submission>
-            {
-                new Submission
-                {
-                    id = Guid.NewGuid(),
-                    assignmentId = assignmentId,
-                    authorId = Guid.NewGuid(),
-                    answers = new List<AnswerItem>(),
-                    status = SubmissionStatusEnum.Draft,
-                    submittedAt = DateTime.UtcNow
-                }
-            };
+        if (result.Status == SubmissionAccessStatus.Forbidden)
+            return Forbid();
 
-            var result = submissions
-                .Skip(offset)
-                .Take(limit)
-                .ToList();
+        return Created($"/api/submissions/{result.Submission!.id}", result.Submission);
+    }
 
-            return Ok(result);
-        }
+    [HttpGet("assignments/{assignmentId}/submissions")]
+    public async Task<IActionResult> GetSubmissions(
+        Guid assignmentId,
+        int limit = 20,
+        int offset = 0,
+        bool? isTeacher = true)
+    {
+        if (isTeacher != true)
+            return Forbid();
 
-        [HttpGet("submissions/{submissionId}")]
-        public IActionResult GetSubmission(Guid submissionId)
-        {
-            var submission = new Submission
-            {
-                id = submissionId,
-                assignmentId = Guid.NewGuid(),
-                authorId = Guid.NewGuid(),
-                status = SubmissionStatusEnum.Draft,
-                submittedAt = DateTime.UtcNow,
-                answers = new List<AnswerItem>
-                {
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.SingleChoiceAnswer,
-                        selectedOptionId = Guid.NewGuid()
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.MultipleChoiceAnswer,
-                        selectedOptionsId = new List<Guid> { Guid.NewGuid() }
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "string"
-                    }
-                }
-            };
+        var submissions = await _submissionsService.GetSubmissions(assignmentId, limit, offset);
+        return Ok(submissions); // GetSubmissions возвращает List<SubmissionDto>, можно оставить как есть
+    }
 
-            return Ok(submission);
-        }
+    [HttpGet("submissions/{submissionId}")]
+    public async Task<IActionResult> GetSubmission(Guid submissionId)
+    {
+        var result = await _submissionsService.GetSubmission(submissionId);
 
-        [HttpPatch("submissions/{submissionId}")]
-        public IActionResult PatchSubmission(Guid submissionId, [FromBody] SubmissionCreateRequest request)
-        {
-            var submission = new Submission
-            {
-                id = submissionId,
-                assignmentId = Guid.NewGuid(),
-                authorId = Guid.NewGuid(),
-                status = SubmissionStatusEnum.Draft,
-                submittedAt = DateTime.UtcNow,
-                answers = new List<AnswerItem>
-                {
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "Updated answer"
-                    }   
-                }
-            };
+        if (result.Status == SubmissionAccessStatus.NotFound)
+            return NotFound();
 
-            return Ok(submission);
-        }
+        if (result.Status == SubmissionAccessStatus.Forbidden)
+            return Forbid();
 
-        [HttpPost("submissions/{submissionId}/submit")]
-        public IActionResult SubmitSubmission(Guid submissionId)
-        {
-            var submission = new Submission
-            {
-                id = submissionId,
-                assignmentId = Guid.NewGuid(),
-                authorId = Guid.NewGuid(),
-                status = SubmissionStatusEnum.RequiresReview,
-                submittedAt = DateTime.UtcNow,
-                answers = new List<AnswerItem>
-                {
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.SingleChoiceAnswer,
-                        selectedOptionId = Guid.NewGuid()
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.MultipleChoiceAnswer,
-                        selectedOptionsId = new List<Guid> { Guid.NewGuid() }
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "Some answer"
-                    }
-                }
-            };
+        return Ok(result.Submission);
+    }
 
-            return Ok(submission);
-        }
-        [HttpPost("submissions/{submissionId}/withdraw")]
-        public IActionResult WithdrawSubmission(Guid submissionId)
-        {
-            var submission = new Submission
-            {
-                id = submissionId,
-                assignmentId = Guid.NewGuid(),
-                authorId = Guid.NewGuid(),
-                status = SubmissionStatusEnum.Draft,
-                submittedAt = DateTime.UtcNow,
-                answers = new List<AnswerItem>
-                {
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.SingleChoiceAnswer,
-                        selectedOptionId = Guid.NewGuid()
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.MultipleChoiceAnswer,
-                        selectedOptionsId = new List<Guid> { Guid.NewGuid() }
-                    },
-                    new AnswerItem
-                    {
-                        assignmentQuestionId = Guid.NewGuid(),
-                        answerType = AnswerTypeEnum.TextAnswer,
-                        text = "Some answer"
-                    }
-                }
-            };
+    [HttpPatch("submissions/{submissionId}")]
+    public async Task<IActionResult> PatchSubmission(
+        Guid submissionId,
+        [FromBody] SubmissionCreateRequest request)
+    {
+        var result = await _submissionsService.PatchSubmission(submissionId, request);
 
-            return Ok(submission);
-        }
+        if (result.Status == SubmissionAccessStatus.NotFound)
+            return NotFound();
 
+        if (result.Status == SubmissionAccessStatus.Forbidden)
+            return Forbid();
+
+        return Ok(result.Submission);
+    }
+
+    [HttpPost("submissions/{submissionId}/submit")]
+    public async Task<IActionResult> SubmitSubmission(Guid submissionId)
+    {
+        var result = await _submissionsService.SubmitSubmission(submissionId);
+
+        if (result.Status == SubmissionAccessStatus.NotFound)
+            return NotFound();
+
+        if (result.Status == SubmissionAccessStatus.Forbidden)
+            return Forbid();
+
+        return Ok(result.Submission);
+    }
+
+    [HttpPost("submissions/{submissionId}/withdraw")]
+    public async Task<IActionResult> WithdrawSubmission(Guid submissionId)
+    {
+        var result = await _submissionsService.WithdrawSubmission(submissionId);
+
+        if (result.Status == SubmissionAccessStatus.NotFound)
+            return NotFound();
+
+        if (result.Status == SubmissionAccessStatus.Forbidden)
+            return Forbid();
+
+        return Ok(result.Submission);
     }
 }
