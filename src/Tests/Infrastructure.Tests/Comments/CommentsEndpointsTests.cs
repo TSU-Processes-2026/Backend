@@ -1,7 +1,9 @@
 using System.Net;
+using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Application.Submissions.Models;
 using FluentAssertions;
 using Infrastructure.Tests.TestHost;
 using Xunit;
@@ -212,18 +214,107 @@ public sealed class CommentsEndpointsTests : IClassFixture<ApiWebApplicationFact
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 
-    [Fact(Skip = "TODO: Нужна реализация submissions")]
+    [Fact]
     public async Task CreateComment_ShouldReturnCreated_WhenTargetTypeIsSubmissionAndRequesterHasAccess()
     {
-        throw new NotImplementedException();
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Comments", "Comments");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        await JoinSubjectAsync(student.AccessToken, subjectId);
+
+        var submissionId = await CreateSubmissionAndGetIdAsync(student.AccessToken, assignmentId);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", student.AccessToken);
+        var response = await _client.PostAsJsonAsync("/api/comments", new
+        {
+            targetType = "Submission",
+            targetId = submissionId,
+            text = "Submission comment"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetProperty("id").GetString().Should().NotBeNullOrWhiteSpace();
+        payload.GetProperty("targetType").GetString().Should().Be("Submission");
+        payload.GetProperty("targetId").GetString().Should().Be(submissionId);
+        payload.GetProperty("authorId").GetString().Should().Be(student.UserId);
+        payload.GetProperty("text").GetString().Should().Be("Submission comment");
     }
 
-    [Fact(Skip = "TODO: Нужна реализация submissions")]
+    [Fact]
     public async Task GetComments_ShouldReturnComments_WhenTargetTypeIsSubmissionAndRequesterHasAccess()
     {
-        throw new NotImplementedException();
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Comments", "Comments");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        await JoinSubjectAsync(student.AccessToken, subjectId);
+
+        var submissionId = await CreateSubmissionAndGetIdAsync(student.AccessToken, assignmentId);
+
+        await CreateCommentAndGetIdAsync(owner.AccessToken, "Submission", submissionId, "Owner comment");
+        await CreateCommentAndGetIdAsync(student.AccessToken, "Submission", submissionId, "Student comment");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", student.AccessToken);
+        var response = await _client.GetAsync($"/api/comments?targetType=Submission&targetId={submissionId}&limit=20&offset=0");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetArrayLength().Should().Be(2);
+        payload.EnumerateArray().All(x => x.GetProperty("targetType").GetString() == "Submission").Should().BeTrue();
+        payload.EnumerateArray().All(x => x.GetProperty("targetId").GetString() == submissionId).Should().BeTrue();
     }
 
+    private async Task<string> CreateAssignmentAndGetIdAsync(string accessToken, string subjectId)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _client.PostAsJsonAsync($"/api/subjects/{subjectId}/assignments", new
+        {
+            content = "Assignment",
+            assignmentData = "Data",
+            questions = new[]
+            {
+                new { id = Guid.NewGuid(), questionType = "Text", questionData = "Explain" }
+            }
+        });
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return payload.GetProperty("id").GetString()!;
+    }
+
+    private static SubmissionCreateRequest CreateSubmissionRequest()
+    {
+        return new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+            {
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.TextAnswer,
+                    text = "My answer"
+                }
+            }
+        };
+    }
+
+    private async Task<string> CreateSubmissionAndGetIdAsync(string accessToken, string assignmentId)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", CreateSubmissionRequest());
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var submissionId = payload.GetProperty("id").GetString();
+        submissionId.Should().NotBeNullOrWhiteSpace();
+        return submissionId!;
+    }
     private async Task<string> CreateCommentAndGetIdAsync(string accessToken, string targetType, string targetId, string text)
     {
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
