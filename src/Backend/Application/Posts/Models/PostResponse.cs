@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Application.Posts.Models;
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "postType")]
+[JsonPolymorphic]
 [JsonDerivedType(typeof(AnnouncementPostResponse), "Announcement")]
 [JsonDerivedType(typeof(MaterialPostResponse), "Material")]
 [JsonDerivedType(typeof(AssignmentPostResponse), "Assignment")]
