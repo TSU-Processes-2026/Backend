@@ -24,4 +24,4 @@ EXPOSE 8080
 
 COPY --from=build /app/publish .
 
-ENTRYPOINT ["sh", "-c", "export PATH=\"$PATH:/root/.dotnet/tools\" && dotnet ef database update --project src/Backend/Infrastructure --startup-project src/Backend/Api && dotnet Api.dll"]
+ENTRYPOINT ["dotnet", "Api.dll"]
