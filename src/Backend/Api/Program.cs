@@ -1,5 +1,7 @@
 using Api.Authentication;
 using Infrastructure.DependencyInjection;
+using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using NSwag;
 using NSwag.Generation.Processors.Security;
 
@@ -41,5 +43,12 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<LmsDbContext>();
+    await db.Database.MigrateAsync();
+    await DataSeeder.SeedAsync(scope.ServiceProvider);
+}
 
 app.Run();
