@@ -1,5 +1,7 @@
 using Api.Authentication;
 using Infrastructure.DependencyInjection;
+using NSwag;
+using NSwag.Generation.Processors.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,11 +13,28 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddScoped<Application.Submissions.Contracts.ISubmissionsService, Infrastructure.Submissions.Services.SubmissionsService>();
 
+builder.Services.AddOpenApiDocument(options =>
+{
+    options.Title = "LMS API";
+
+    options.AddSecurity("bearerAuth", new OpenApiSecurityScheme
+    {
+        Type = OpenApiSecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "JWT Authorization header using the Bearer scheme."
+    });
+
+    options.OperationProcessors.Add(
+        new AspNetCoreOperationSecurityScopeProcessor("bearerAuth"));
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
-    app.MapOpenApi();
+    app.UseOpenApi();
+    app.UseSwaggerUi();
 }
 
 app.UseExceptionHandler();

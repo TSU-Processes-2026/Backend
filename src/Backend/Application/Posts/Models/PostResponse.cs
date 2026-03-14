@@ -2,10 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace Application.Posts.Models;
 
-[JsonPolymorphic]
-[JsonDerivedType(typeof(AnnouncementPostResponse))]
-[JsonDerivedType(typeof(MaterialPostResponse))]
-[JsonDerivedType(typeof(AssignmentPostResponse))]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "postType")]
+[JsonDerivedType(typeof(AnnouncementPostResponse), "Announcement")]
+[JsonDerivedType(typeof(MaterialPostResponse), "Material")]
+[JsonDerivedType(typeof(AssignmentPostResponse), "Assignment")]
 public abstract class PostResponse
 {
     public required Guid Id { get; init; }
