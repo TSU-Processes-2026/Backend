@@ -43,6 +43,7 @@ components:
       type: object
       properties:
         userId: { type: string, format: uuid }
+        username: { type: string }
         role: { type: string, enum: [Student, Teacher, Admin] }
 
     # ==========================================

@@ -152,7 +152,7 @@ public sealed class SubjectsService : ISubjectsService
 
         if (existingParticipant is not null)
         {
-            return JoinSubjectResult.Success(MapParticipant(existingParticipant));
+        return JoinSubjectResult.Success(await MapParticipantAsync(existingParticipant, cancellationToken));
         }
 
         var participant = new SubjectParticipant
@@ -166,7 +166,7 @@ public sealed class SubjectsService : ISubjectsService
         _dbContext.SubjectParticipants.Add(participant);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return JoinSubjectResult.Success(MapParticipant(participant));
+        return JoinSubjectResult.Success(await MapParticipantAsync(participant, cancellationToken));
     }
 
     public async Task<ParticipantMutationResult> AddParticipantAsync(Guid currentUserId, Guid subjectId, AddParticipantRequest request, CancellationToken cancellationToken)
@@ -220,7 +220,7 @@ public sealed class SubjectsService : ISubjectsService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return ParticipantMutationResult.Success(MapParticipant(existing));
+        return ParticipantMutationResult.Success(await MapParticipantAsync(existing, cancellationToken));
     }
 
     public async Task<ParticipantsListResult> GetParticipantsAsync(Guid currentUserId, Guid subjectId, int limit, int offset, CancellationToken cancellationToken)
@@ -238,14 +238,19 @@ public sealed class SubjectsService : ISubjectsService
 
         var participants = await _dbContext.SubjectParticipants
             .Where(x => x.SubjectId == subjectId)
+            .Join(
+                _dbContext.Users,
+                participant => participant.UserId,
+                user => user.Id,
+                (participant, user) => new ParticipantResponse
+                {
+                    UserId = participant.UserId,
+                    Username = user.UserName ?? string.Empty,
+                    Role = participant.Role
+                })
             .OrderBy(x => x.UserId)
             .Skip(safeOffset)
             .Take(safeLimit)
-            .Select(x => new ParticipantResponse
-            {
-                UserId = x.UserId,
-                Role = x.Role
-            })
             .ToListAsync(cancellationToken);
 
         return ParticipantsListResult.Success(participants);
@@ -277,7 +282,7 @@ public sealed class SubjectsService : ISubjectsService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return ParticipantMutationResult.Success(MapParticipant(participant));
+        return ParticipantMutationResult.Success(await MapParticipantAsync(participant, cancellationToken));
     }
 
     public async Task<ParticipantDeleteResult> DeleteParticipantAsync(Guid currentUserId, Guid subjectId, Guid targetUserId, CancellationToken cancellationToken)
@@ -324,11 +329,17 @@ public sealed class SubjectsService : ISubjectsService
         };
     }
 
-    private static ParticipantResponse MapParticipant(SubjectParticipant participant)
+    private async Task<ParticipantResponse> MapParticipantAsync(SubjectParticipant participant, CancellationToken cancellationToken)
     {
+        var username = await _dbContext.Users
+            .Where(x => x.Id == participant.UserId)
+            .Select(x => x.UserName)
+            .SingleOrDefaultAsync(cancellationToken);
+
         return new ParticipantResponse
         {
             UserId = participant.UserId,
+            Username = username ?? string.Empty,
             Role = participant.Role
         };
     }

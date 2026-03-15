@@ -23,7 +23,8 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
         var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
         var subjectId = await CreateSubjectAsync(owner.AccessToken, "Joinable", "Joinable");
 
-        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        var username = $"student_{Guid.NewGuid():N}";
+        var student = await RegisterAndLoginAsync(username);
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", student.AccessToken);
 
         var response = await _client.PostAsync($"/api/subjects/{subjectId}/join", null);
@@ -31,6 +32,7 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         payload.GetProperty("userId").GetString().Should().Be(student.UserId);
+        payload.GetProperty("username").GetString().Should().Be(username);
         payload.GetProperty("role").GetString().Should().Be("Student");
     }
 
@@ -61,7 +63,8 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
         var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
         var subjectId = await CreateSubjectAsync(owner.AccessToken, "Participants", "Participants");
 
-        var teacher = await RegisterAndLoginAsync($"teacher_{Guid.NewGuid():N}");
+        var username = $"teacher_{Guid.NewGuid():N}";
+        var teacher = await RegisterAndLoginAsync(username);
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
 
         var response = await _client.PostAsJsonAsync($"/api/subjects/{subjectId}/participants", new
@@ -73,6 +76,7 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         payload.GetProperty("userId").GetString().Should().Be(teacher.UserId);
+        payload.GetProperty("username").GetString().Should().Be(username);
         payload.GetProperty("role").GetString().Should().Be("Teacher");
     }
 
@@ -109,6 +113,7 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         payload.GetArrayLength().Should().BeGreaterThan(0);
+        payload[0].GetProperty("username").GetString().Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -139,6 +144,7 @@ public sealed class ParticipantsEndpointsTests : IClassFixture<ApiWebApplication
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetProperty("username").GetString().Should().NotBeNullOrWhiteSpace();
         payload.GetProperty("role").GetString().Should().Be("Teacher");
     }
 
