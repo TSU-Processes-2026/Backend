@@ -1,5 +1,6 @@
 using Application.Posts.Contracts;
 using Application.Posts.Models;
+using Infrastructure.Files.Contracts;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +17,13 @@ public sealed class PostsService : IPostsService
 
     private readonly LmsDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
+    private readonly IFileStorage _fileStorage;
 
-    public PostsService(LmsDbContext dbContext, TimeProvider timeProvider)
+    public PostsService(LmsDbContext dbContext, TimeProvider timeProvider, IFileStorage fileStorage)
     {
         _dbContext = dbContext;
         _timeProvider = timeProvider;
+        _fileStorage = fileStorage;
     }
 
     public async Task<PostListResult> GetSubjectPostsAsync(Guid currentUserId, Guid subjectId, string? postType, int limit, int offset, CancellationToken cancellationToken)
@@ -93,6 +96,8 @@ public sealed class PostsService : IPostsService
         var fileName = normalizedPostType == MaterialPostType ? request.FileName : null;
         var storagePath = normalizedPostType == MaterialPostType ? request.StoragePath : null;
         var fileSize = normalizedPostType == MaterialPostType ? request.FileSize : null;
+        var fileContent = normalizedPostType == MaterialPostType ? request.FileContent : null;
+        var needsFile = normalizedPostType == MaterialPostType && !string.IsNullOrWhiteSpace(storagePath) && fileContent is not null;
 
         var post = new Post
         {
@@ -108,8 +113,26 @@ public sealed class PostsService : IPostsService
             Subject = await _dbContext.Subjects.SingleAsync(x => x.Id == subjectId, cancellationToken)
         };
 
-        _dbContext.Posts.Add(post);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (needsFile)
+        {
+            await using var content = fileContent!;
+            await _fileStorage.SaveAsync(storagePath!, content, cancellationToken);
+        }
+
+        try
+        {
+            _dbContext.Posts.Add(post);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            if (needsFile)
+            {
+                await _fileStorage.DeleteAsync(storagePath!, cancellationToken);
+            }
+
+            throw;
+        }
 
         return PostUpdateResult.Success(MapPost(post));
     }
@@ -152,10 +175,83 @@ public sealed class PostsService : IPostsService
             return PostDeleteResult.Forbidden();
         }
 
+        var storagePath = post.StoragePath;
+
         _dbContext.Posts.Remove(post);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        if (post.PostType == MaterialPostType && !string.IsNullOrWhiteSpace(storagePath))
+        {
+            await _fileStorage.DeleteAsync(storagePath, cancellationToken);
+        }
+
         return PostDeleteResult.Success();
+    }
+
+    public async Task<PostFileInfoResult> GetFileInfoAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken)
+    {
+        var post = await _dbContext.Posts
+            .SingleOrDefaultAsync(x => x.Id == postId, cancellationToken);
+
+        if (post is null)
+        {
+            return PostFileInfoResult.NotFound();
+        }
+
+        if (!await IsParticipantAsync(currentUserId, post.SubjectId, cancellationToken))
+        {
+            return PostFileInfoResult.NotFound();
+        }
+
+        if (post.PostType != MaterialPostType || string.IsNullOrWhiteSpace(post.FileName) || post.FileSize is null || string.IsNullOrWhiteSpace(post.StoragePath))
+        {
+            return PostFileInfoResult.NotFound();
+        }
+
+        var fileInfo = new PostFileInfoResponse
+        {
+            FileName = post.FileName,
+            FileSize = post.FileSize.Value,
+            DownloadUrl = $"/api/posts/{post.Id}/file"
+        };
+
+        return PostFileInfoResult.Success(fileInfo);
+    }
+
+    public async Task<PostFileDownloadResult> DownloadFileAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken)
+    {
+        var post = await _dbContext.Posts
+            .SingleOrDefaultAsync(x => x.Id == postId, cancellationToken);
+
+        if (post is null)
+        {
+            return PostFileDownloadResult.NotFound();
+        }
+
+        if (!await IsParticipantAsync(currentUserId, post.SubjectId, cancellationToken))
+        {
+            return PostFileDownloadResult.NotFound();
+        }
+
+        if (post.PostType != MaterialPostType || string.IsNullOrWhiteSpace(post.FileName) || string.IsNullOrWhiteSpace(post.StoragePath))
+        {
+            return PostFileDownloadResult.NotFound();
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(post.StoragePath, cancellationToken);
+        if (stream is null)
+        {
+            return PostFileDownloadResult.NotFound();
+        }
+
+        var payload = new PostFileDownloadPayload
+        {
+            Content = stream,
+            FileName = post.FileName,
+            ContentType = "application/octet-stream"
+        };
+
+        return PostFileDownloadResult.Success(payload);
     }
 
     private async Task<bool> IsParticipantAsync(Guid userId, Guid subjectId, CancellationToken cancellationToken)
@@ -239,7 +335,8 @@ public sealed class PostsService : IPostsService
                 CreatedAt = post.CreatedAt,
                 FileName = post.FileName ?? string.Empty,
                 StoragePath = post.StoragePath ?? string.Empty,
-                FileSize = post.FileSize ?? 0
+                FileSize = post.FileSize ?? 0,
+                DownloadUrl = $"/api/posts/{post.Id}/file"
             };
         }
 

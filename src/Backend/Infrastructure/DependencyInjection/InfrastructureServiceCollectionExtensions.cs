@@ -8,6 +8,9 @@ using Application.Users.Contracts;
 using Infrastructure.Assignments.Services;
 using Infrastructure.Auth.Services;
 using Infrastructure.Comments.Services;
+using Infrastructure.Files.Contracts;
+using Infrastructure.Files.Options;
+using Infrastructure.Files.Services;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Infrastructure.Posts.Services;
@@ -30,6 +33,10 @@ public static class InfrastructureServiceCollectionExtensions
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .ValidateDataAnnotations()
             .Validate(options => options.SigningKey.Length >= 32, "Jwt:SigningKey must be at least 32 characters long.")
+            .ValidateOnStart();
+
+        services.AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.SectionName))
             .ValidateOnStart();
 
         if (string.Equals(databaseProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
@@ -57,6 +64,7 @@ public static class InfrastructureServiceCollectionExtensions
             .AddEntityFrameworkStores<LmsDbContext>();
 
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICommentsService, CommentsService>();
         services.AddScoped<ISubjectsService, SubjectsService>();

@@ -90,7 +90,8 @@ public sealed class PostsController : ControllerBase
             Content = request?.Content,
             FileName = fileName,
             StoragePath = storagePath,
-            FileSize = request?.File?.Length
+            FileSize = request?.File?.Length,
+            FileContent = request?.File?.OpenReadStream()
         };
 
         var result = await _postsService.CreateAsync(userId.Value, subjectId, createRequest, cancellationToken);
@@ -123,6 +124,52 @@ public sealed class PostsController : ControllerBase
             PostAccessStatus.Success => Ok(result.Post),
             PostAccessStatus.NotFound => NotFound(CreateNotFound()),
             _ => throw new InvalidOperationException("Unsupported post access status.")
+        };
+    }
+
+    [HttpGet("posts/{postId:guid}/file-info")]
+    [ProducesResponseType(typeof(PostFileInfoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetFileInfo([FromRoute] Guid postId, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _postsService.GetFileInfoAsync(userId.Value, postId, cancellationToken);
+
+        return result.Status switch
+        {
+            PostFileInfoStatus.Success => Ok(result.FileInfo),
+            PostFileInfoStatus.NotFound => NotFound(CreateNotFound()),
+            _ => throw new InvalidOperationException("Unsupported post file info status.")
+        };
+    }
+
+    [HttpGet("posts/{postId:guid}/file")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadFile([FromRoute] Guid postId, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _postsService.DownloadFileAsync(userId.Value, postId, cancellationToken);
+
+        return result.Status switch
+        {
+            PostFileDownloadStatus.Success => File(result.File!.Content, result.File.ContentType, result.File.FileName),
+            PostFileDownloadStatus.NotFound => NotFound(CreateNotFound()),
+            _ => throw new InvalidOperationException("Unsupported post file download status.")
         };
     }
 

@@ -9,5 +9,7 @@ public interface IPostsService
     Task<PostUpdateResult> CreateAsync(Guid currentUserId, Guid subjectId, CreatePostRequest request, CancellationToken cancellationToken);
     Task<PostUpdateResult> UpdateAsync(Guid currentUserId, Guid postId, UpdatePostRequest request, CancellationToken cancellationToken);
     Task<PostDeleteResult> DeleteAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken);
+    Task<PostFileInfoResult> GetFileInfoAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken);
+    Task<PostFileDownloadResult> DownloadFileAsync(Guid currentUserId, Guid postId, CancellationToken cancellationToken);
 }
 

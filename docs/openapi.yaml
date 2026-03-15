@@ -75,6 +75,14 @@ components:
             fileName: { type: string }
             storagePath: { type: string }
             fileSize: { type: integer }
+            downloadUrl: { type: string }
+
+    MaterialFileInfo:
+      type: object
+      properties:
+        fileName: { type: string }
+        fileSize: { type: integer }
+        downloadUrl: { type: string }
 
     # ==========================================
     # ВОПРОСЫ И ЗАДАНИЯ
@@ -588,6 +596,57 @@ paths:
         '403':
           description: Forbidden. Только автор или TEACHER/ADMIN.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /posts/{postId}/file-info:
+    get:
+      tags: [Posts]
+      summary: Получить информацию о файле поста
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialFileInfo'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+      security:
+        - BearerAuth: []
+
+  /posts/{postId}/file:
+    get:
+      tags: [Posts]
+      summary: Скачать файл поста
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+      security:
+        - BearerAuth: []
 
   # ==========================================
   # COMMENTS

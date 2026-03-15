@@ -94,6 +94,7 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         payload.GetProperty("postType").GetString().Should().Be("Material");
         payload.GetProperty("fileName").GetString().Should().Be("lesson-1.txt");
+        payload.GetProperty("downloadUrl").GetString().Should().Be($"/api/posts/{payload.GetProperty("id").GetString()}/file");
     }
 
     [Fact]
@@ -151,6 +152,7 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
         material.TryGetProperty("fileName", out _).Should().BeTrue();
         material.TryGetProperty("storagePath", out _).Should().BeTrue();
         material.TryGetProperty("fileSize", out _).Should().BeTrue();
+        material.TryGetProperty("downloadUrl", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -273,6 +275,7 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
         payload.GetProperty("id").GetString().Should().Be(materialId);
         payload.GetProperty("postType").GetString().Should().Be("Material");
         payload.GetProperty("fileName").GetString().Should().Be("material.pdf");
+        payload.GetProperty("downloadUrl").GetString().Should().Be($"/api/posts/{materialId}/file");
     }
     [Fact]
     public async Task GetPostById_ShouldReturnUnauthorized_WhenAccessTokenMissing()
@@ -414,6 +417,89 @@ public sealed class PostsEndpointsTests : IClassFixture<ApiWebApplicationFactory
     public async Task DeletePost_ShouldReturnUnauthorized_WhenAccessTokenMissing()
     {
         var response = await _client.DeleteAsync($"/api/posts/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task GetPostFileInfo_ShouldReturnInfo_WhenRequesterIsParticipant()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+        var postId = await CreateMaterialPostAndGetIdAsync(owner.AccessToken, subjectId, "Material post", "material.bin");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/posts/{postId}/file-info");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.GetProperty("fileName").GetString().Should().Be("material.bin");
+        payload.GetProperty("fileSize").GetInt64().Should().BeGreaterThan(0);
+        payload.GetProperty("downloadUrl").GetString().Should().Be($"/api/posts/{postId}/file");
+    }
+
+    [Fact]
+    public async Task GetPostFileInfo_ShouldReturnNotFound_WhenPostIsAnnouncement()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+        var postId = await CreateAnnouncementPostAndGetIdAsync(owner.AccessToken, subjectId, "Announcement");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/posts/{postId}/file-info");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task GetPostFileInfo_ShouldReturnUnauthorized_WhenAccessTokenMissing()
+    {
+        var response = await _client.GetAsync($"/api/posts/{Guid.NewGuid()}/file-info");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task DownloadPostFile_ShouldReturnContent_WhenRequesterIsParticipant()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+        var fileBytes = Encoding.UTF8.GetBytes("material-bytes");
+        var response = await CreatePostAsync(owner.AccessToken, subjectId, "Material", "Material post", fileBytes, "material.txt");
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var createdPayload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var postId = createdPayload.GetProperty("id").GetString();
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var downloadResponse = await _client.GetAsync($"/api/posts/{postId}/file");
+
+        downloadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        downloadResponse.Content.Headers.ContentType?.MediaType.Should().Be("application/octet-stream");
+        var downloadedBytes = await downloadResponse.Content.ReadAsByteArrayAsync();
+        downloadedBytes.Should().Equal(fileBytes);
+    }
+
+    [Fact]
+    public async Task DownloadPostFile_ShouldReturnNotFound_WhenPostIsAnnouncement()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Posts", "Posts");
+        var postId = await CreateAnnouncementPostAndGetIdAsync(owner.AccessToken, subjectId, "Announcement");
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+        var response = await _client.GetAsync($"/api/posts/{postId}/file");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task DownloadPostFile_ShouldReturnUnauthorized_WhenAccessTokenMissing()
+    {
+        var response = await _client.GetAsync($"/api/posts/{Guid.NewGuid()}/file");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");

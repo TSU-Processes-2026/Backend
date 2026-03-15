@@ -15,6 +15,7 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<global::Pro
         _databaseName = $"lms-tests-{Guid.NewGuid():N}";
         Environment.SetEnvironmentVariable("Database__Provider", "InMemory");
         Environment.SetEnvironmentVariable("Database__InMemoryName", _databaseName);
+        Environment.SetEnvironmentVariable("FileStorage__RootPath", Path.Combine(Path.GetTempPath(), _databaseName, "uploads"));
         Environment.SetEnvironmentVariable("Jwt__Issuer", "lms-test-issuer");
         Environment.SetEnvironmentVariable("Jwt__Audience", "lms-test-audience");
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "01234567890123456789012345678901");
