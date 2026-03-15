@@ -65,6 +65,7 @@ namespace Infrastructure.Submissions.Services
                 id = Guid.NewGuid(),
                 assignmentId = assignmentId,
                 authorId = authorId,
+                post = post,
                 answers = answers,
                 status = SubmissionStatusEnum.Draft,
                 submittedAt = DateTime.UtcNow
