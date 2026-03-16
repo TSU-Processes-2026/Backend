@@ -47,11 +47,18 @@ public sealed class SubmissionsController : ControllerBase
         int offset = 0,
         bool? isTeacher = true)
     {
-        if (isTeacher != true)
-            return Forbid();
+        if (isTeacher == true)
+        {
+            var submissions = await _submissionsService.GetSubmissions(assignmentId, limit, offset);
+            return Ok(submissions);
+        }
 
-        var submissions = await _submissionsService.GetSubmissions(assignmentId, limit, offset);
-        return Ok(submissions);
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var studentSubmissions = await _submissionsService.GetUserSubmissions(assignmentId, userId.Value, limit, offset);
+        return Ok(studentSubmissions);
     }
 
     [HttpGet("submissions/{submissionId}")]

@@ -12,6 +12,7 @@ namespace Application.Submissions.Contracts
             Guid authorId,
             SubmissionCreateRequest request);
         Task<List<SubmissionDto>> GetSubmissions(Guid assignmentId, int limit, int offset);
+        Task<List<SubmissionDto>> GetUserSubmissions(Guid assignmentId, Guid authorId, int limit, int offset);
         Task<SubmissionAccessResult> GetSubmission(Guid submissionId);
         Task<SubmissionAccessResult> PatchSubmission(Guid submissionId, SubmissionCreateRequest request);
         Task<SubmissionAccessResult> SubmitSubmission(Guid submissionId);

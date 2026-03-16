@@ -89,6 +89,18 @@ namespace Infrastructure.Submissions.Services
             return submissions.Select(MapToDto).ToList();
         }
 
+        public async Task<List<SubmissionDto>> GetUserSubmissions(Guid assignmentId, Guid authorId, int limit, int offset)
+        {
+            var submissions = await _dbContext.Submissions
+                .Where(x => x.assignmentId == assignmentId && x.authorId == authorId)
+                .Include(x => x.answers)
+                .Skip(offset)
+                .Take(limit)
+                .ToListAsync();
+
+            return submissions.Select(MapToDto).ToList();
+        }
+
         public async Task<SubmissionAccessResult> GetSubmission(Guid submissionId)
         {
             var submission = await _dbContext.Submissions

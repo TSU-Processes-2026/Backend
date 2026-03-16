@@ -48,5 +48,37 @@ namespace Api.Controllers
                 _ => StatusCode(500)
             };
         }
+
+        [HttpPut]
+        public async Task<IActionResult> UpdateGrade(Guid submissionId, [FromBody] GradeRequest request)
+        {
+            var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var result = await _gradesService.UpdateGradeAsync(submissionId, request.score, request.verdictText, teacherId);
+
+            return result.Status switch
+            {
+                GradesAccessStatus.Success => Ok(result.grade),
+                GradesAccessStatus.NotFound => NotFound(),
+                GradesAccessStatus.Forbidden => Forbid(),
+                _ => StatusCode(500)
+            };
+        }
+
+        [HttpDelete]
+        public async Task<IActionResult> DeleteGrade(Guid submissionId)
+        {
+            var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var result = await _gradesService.DeleteGradeAsync(submissionId, teacherId);
+
+            return result.Status switch
+            {
+                GradesAccessStatus.Success => NoContent(),
+                GradesAccessStatus.NotFound => NotFound(),
+                GradesAccessStatus.Forbidden => Forbid(),
+                _ => StatusCode(500)
+            };
+        }
     }
 }

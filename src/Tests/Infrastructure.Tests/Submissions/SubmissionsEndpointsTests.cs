@@ -93,6 +93,50 @@ public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationF
     }
 
     [Fact]
+    public async Task GetSubmissions_ShouldReturnOnlyAuthorSubmissions_WhenUserIsStudentAndIsTeacherIsFalse()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student1 = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student1.AccessToken);
+
+        await JoinSubjectAsync(student1.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest request1 = CreateSubmissionRequest();
+        var submissionResponse1 =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request1);
+        submissionResponse1.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var student2 = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student2.AccessToken);
+
+        await JoinSubjectAsync(student2.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest request2 = CreateSubmissionRequest();
+        var submissionResponse2 =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request2);
+        submissionResponse2.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student1.AccessToken);
+
+        var response =
+            await _client.GetAsync($"/api/assignments/{assignmentId}/submissions?limit=20&offset=0&isTeacher=false");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.ValueKind.Should().Be(JsonValueKind.Array);
+        payload.GetArrayLength().Should().Be(1);
+        payload[0].GetProperty("authorId").GetString().Should().Be(student1.UserId);
+    }
+
+    [Fact]
     public async Task GetSubmission_ShouldReturnOk()
     {
         var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");

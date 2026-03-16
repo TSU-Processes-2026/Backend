@@ -204,7 +204,7 @@ components:
         submissionId: { type: string, format: uuid }
         score: { type: integer }
         verdictText: { type: string }
-        gradedAt: { type: string, format: date-time }
+        verdictedAt: { type: string, format: date-time }
 
     Comment:
       type: object
@@ -864,6 +864,9 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, default: 0 }
+        - name: isTeacher
+          in: query
+          schema: { type: boolean, default: true }
       responses:
         '200':
           description: OK
@@ -872,7 +875,7 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для роли TEACHER.
+          description: Forbidden. Доступ запрещен.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
     post:
       tags: [Submissions]
@@ -883,6 +886,9 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: isStudent
+          in: query
+          schema: { type: boolean, nullable: true }
       requestBody:
         required: true
         content:
@@ -1046,4 +1052,54 @@ paths:
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
           description: Forbidden. Оценить решение может любой пользователь с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Grades]
+      summary: Обновить оценку решения
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score: { type: integer }
+                verdictText: { type: string }
+      responses:
+        '200':
+          description: Оценка обновлена
+          content: { application/json: { schema: { $ref: '#/components/schemas/Grade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Обновлять оценку может любой пользователь с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Grades]
+      summary: Удалить оценку решения
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Оценка удалена
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Удалять оценку может любой пользователь с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }

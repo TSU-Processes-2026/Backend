@@ -9,5 +9,7 @@ namespace Application.Grades.Contract
     {
         Task<GradesAccessResult> GetGradeAsync(Guid submissionId);
         Task<GradesAccessResult> CreateGradeAsync(Guid submissionId, int score, string verdictText, string teacherId);
+        Task<GradesAccessResult> UpdateGradeAsync(Guid submissionId, int score, string verdictText, string teacherId);
+        Task<GradesAccessResult> DeleteGradeAsync(Guid submissionId, string teacherId);
     }
 }

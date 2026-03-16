@@ -71,5 +71,51 @@ namespace Infrastructure.Grades
                 verdictedAt = grade.verdictedAt
             });
         }
+
+        public async Task<GradesAccessResult> UpdateGradeAsync(Guid submissionId, int score, string verdictText, string teacherId)
+        {
+            var grade = await _dbContext.Grades
+                .FirstOrDefaultAsync(g => g.submissionId == submissionId);
+
+            if (grade == null)
+                return GradesAccessResult.NotFound();
+
+            grade.score = score;
+            grade.verdictText = verdictText;
+            grade.verdictedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync();
+
+            return GradesAccessResult.Success(new GradeDto
+            {
+                id = grade.id,
+                submissionId = grade.submissionId,
+                score = grade.score,
+                verdictText = grade.verdictText,
+                verdictedAt = grade.verdictedAt
+            });
+        }
+
+        public async Task<GradesAccessResult> DeleteGradeAsync(Guid submissionId, string teacherId)
+        {
+            var grade = await _dbContext.Grades
+                .FirstOrDefaultAsync(g => g.submissionId == submissionId);
+
+            if (grade == null)
+                return GradesAccessResult.NotFound();
+
+            var submission = await _dbContext.Submissions
+                .FirstOrDefaultAsync(s => s.id == submissionId);
+
+            if (submission == null)
+                return GradesAccessResult.NotFound();
+
+            submission.status = SubmissionStatusEnum.RequiresReview;
+
+            _dbContext.Grades.Remove(grade);
+            await _dbContext.SaveChangesAsync();
+
+            return GradesAccessResult.Success(null);
+        }
     }
 }

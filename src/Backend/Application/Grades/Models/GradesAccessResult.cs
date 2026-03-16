@@ -11,8 +11,8 @@ namespace Application.Submissions.Models
 
         private GradesAccessResult(GradesAccessStatus status, GradeDto? grade = null)
         {
-            status = status;
-            grade = grade;
+            Status = status;
+            this.grade = grade;
         }
 
         public static GradesAccessResult Success(GradeDto submission)
