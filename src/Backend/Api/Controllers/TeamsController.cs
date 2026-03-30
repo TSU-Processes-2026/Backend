@@ -96,6 +96,33 @@ public sealed class TeamsController : ControllerBase
         };
     }
 
+    [HttpPost("subjects/{subjectId:guid}/teams/random")]
+    [ProducesResponseType(typeof(TeamRandomPreviewResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(TeamRandomPreviewResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> PreviewRandomDistribution(
+        [FromRoute] Guid subjectId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.PreviewRandomDistributionAsync(userId.Value, subjectId, cancellationToken);
+
+        return result.Status switch
+        {
+            TeamRandomPreviewStatus.Success => Ok(result.Response),
+            TeamRandomPreviewStatus.Invalid => BadRequest(result.Response),
+            TeamRandomPreviewStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported team random preview status.")
+        };
+    }
+
     [HttpPost("subjects/{subjectId:guid}/teams/validate")]
     [ProducesResponseType(typeof(TeamValidationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
