@@ -1,0 +1,16 @@
+using Application.Teams.Models;
+
+namespace Infrastructure.Persistence.Entities;
+
+public sealed class SubjectTeamSettings
+{
+    public Guid SubjectId { get; set; }
+    public TeamDistributionMode DistributionMode { get; set; }
+    public int? FixedTeamsCount { get; set; }
+    public int? FixedTeamSize { get; set; }
+    public int? MinTeamSize { get; set; }
+    public int? MaxTeamSize { get; set; }
+    public bool IsFinalized { get; set; }
+    public DateTimeOffset? FinalizedAt { get; set; }
+    public Subject Subject { get; set; } = null!;
+}
