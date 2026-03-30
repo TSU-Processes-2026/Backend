@@ -114,6 +114,41 @@ components:
           type: array
           items: { type: string }
 
+    RandomTeamPreviewTeam:
+      type: object
+      properties:
+        memberIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    RandomTeamDistributionSuggestion:
+      type: object
+      properties:
+        suggestedTeamsCount: { type: integer }
+        suggestedMinTeamSize: { type: integer }
+        suggestedMaxTeamSize: { type: integer }
+        suggestedFixedTeamSize: { type: integer, nullable: true }
+        suggestedTeamSizes:
+          type: array
+          items: { type: integer }
+
+    TeamRandomPreviewResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        isValid: { type: boolean }
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/RandomTeamPreviewTeam' }
+        errors:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        suggestedParameters:
+          $ref: '#/components/schemas/RandomTeamDistributionSuggestion'
+
     TeamValidationResponse:
       type: object
       properties:
@@ -681,6 +716,35 @@ paths:
         '403':
           description: Forbidden. Только для участников предмета.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/random:
+    post:
+      tags: [Teams]
+      summary: Предпросмотр случайного распределения команд
+      description: Формирует случайный черновик команд без сохранения в БД.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRandomPreviewResponse' }
+        '400':
+          description: Constraints are infeasible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRandomPreviewResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin в режиме Random.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
   /subjects/{subjectId}/teams/validate:
     post:
       tags: [Teams]

@@ -124,6 +124,58 @@ public sealed class TeamsService : ITeamsService
         });
     }
 
+    public async Task<TeamRandomPreviewResult> PreviewRandomDistributionAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return TeamRandomPreviewResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Random)
+        {
+            return TeamRandomPreviewResult.Forbidden();
+        }
+
+        var snapshot = settings is null
+            ? new SettingsSnapshot(TeamDistributionMode.Random, null, null, null, null)
+            : SettingsSnapshot.From(settings);
+
+        var students = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        if (students.Count == 0)
+        {
+            return TeamRandomPreviewResult.Invalid(BuildInvalidRandomPreviewResponse(subjectId, snapshot, 0, new[] { "No students found in subject." }));
+        }
+
+        var settingsErrors = ValidateSettings(snapshot);
+        if (settingsErrors.Count > 0)
+        {
+            return TeamRandomPreviewResult.Invalid(BuildInvalidRandomPreviewResponse(subjectId, snapshot, students.Count, settingsErrors));
+        }
+
+        var sizing = TryBuildRandomTeamSizes(students.Count, snapshot);
+        if (sizing.Errors.Count > 0)
+        {
+            return TeamRandomPreviewResult.Invalid(BuildInvalidRandomPreviewResponse(subjectId, snapshot, students.Count, sizing.Errors));
+        }
+
+        return TeamRandomPreviewResult.Success(new TeamRandomPreviewResponse
+        {
+            SubjectId = subjectId,
+            IsValid = true,
+            Teams = BuildRandomPreviewTeams(students, sizing.TeamSizes),
+            Errors = Array.Empty<string>(),
+            Warnings = Array.Empty<string>(),
+            SuggestedParameters = null
+        });
+    }
+
     public async Task<TeamValidationResult> ValidateManualDistributionAsync(Guid currentUserId, Guid subjectId, ManualTeamDistributionRequest request, CancellationToken cancellationToken)
     {
         if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
@@ -134,7 +186,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Manual)
+        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
         {
             return TeamValidationResult.Forbidden();
         }
@@ -160,7 +212,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Manual)
+        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
         {
             return TeamCreateResult.Forbidden();
         }
@@ -248,7 +300,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Manual)
+        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
         {
             return TeamMutationResult.Forbidden();
         }
@@ -330,7 +382,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Manual)
+        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
         {
             return TeamMutationResult.Forbidden();
         }
@@ -407,7 +459,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Manual)
+        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
         {
             return TeamFinalizeResult.Forbidden();
         }
@@ -662,6 +714,265 @@ public sealed class TeamsService : ITeamsService
         return warnings;
     }
 
+    private static TeamRandomPreviewResponse BuildInvalidRandomPreviewResponse(
+        Guid subjectId,
+        SettingsSnapshot settings,
+        int totalStudents,
+        IReadOnlyList<string> errors)
+    {
+        IReadOnlyList<string> warnings = totalStudents > 0
+            ? GetFeasibilityWarnings(totalStudents, settings)
+                .Distinct()
+                .ToList()
+            : Array.Empty<string>();
+
+        return new TeamRandomPreviewResponse
+        {
+            SubjectId = subjectId,
+            IsValid = false,
+            Teams = Array.Empty<RandomTeamPreviewTeamResponse>(),
+            Errors = errors,
+            Warnings = warnings,
+            SuggestedParameters = totalStudents > 0
+                ? BuildRandomSuggestion(totalStudents, settings)
+                : null
+        };
+    }
+
+    private static RandomSizingOutcome TryBuildRandomTeamSizes(int totalStudents, SettingsSnapshot settings)
+    {
+        var outcome = new RandomSizingOutcome();
+
+        if (settings.FixedTeamSize.HasValue)
+        {
+            var fixedTeamSize = settings.FixedTeamSize.Value;
+
+            if (!IsWithinRange(fixedTeamSize, settings))
+            {
+                outcome.Errors.Add("FixedTeamSize must be within MinTeamSize and MaxTeamSize.");
+                return outcome;
+            }
+
+            if (totalStudents % fixedTeamSize != 0)
+            {
+                outcome.Errors.Add("Total number of students must be divisible by FixedTeamSize.");
+                return outcome;
+            }
+
+            var teamsCountFromSize = totalStudents / fixedTeamSize;
+
+            if (settings.FixedTeamsCount.HasValue && settings.FixedTeamsCount.Value != teamsCountFromSize)
+            {
+                outcome.Errors.Add("Total number of students must be equal to FixedTeamsCount multiplied by FixedTeamSize.");
+                return outcome;
+            }
+
+            if (settings.FixedTeamsCount.HasValue && settings.FixedTeamsCount.Value > totalStudents)
+            {
+                outcome.Errors.Add("FixedTeamsCount exceeds total number of students.");
+                return outcome;
+            }
+
+            outcome.TeamSizes.AddRange(Enumerable.Repeat(fixedTeamSize, teamsCountFromSize));
+            return outcome;
+        }
+
+        if (settings.FixedTeamsCount.HasValue)
+        {
+            var fixedTeamsCount = settings.FixedTeamsCount.Value;
+
+            if (fixedTeamsCount > totalStudents)
+            {
+                outcome.Errors.Add("FixedTeamsCount exceeds total number of students.");
+                return outcome;
+            }
+
+            var sizesForFixedCount = BuildBalancedTeamSizes(totalStudents, fixedTeamsCount);
+
+            if (sizesForFixedCount.Any(size => !IsWithinRange(size, settings)))
+            {
+                outcome.Errors.Add("Total number of students does not fit FixedTeamsCount with MinTeamSize and MaxTeamSize.");
+                return outcome;
+            }
+
+            outcome.TeamSizes.AddRange(sizesForFixedCount);
+            return outcome;
+        }
+
+        var candidateCounts = GetBalancedTeamCounts(totalStudents, settings);
+        if (candidateCounts.Count == 0)
+        {
+            outcome.Errors.Add("Current number of students cannot be distributed within MinTeamSize and MaxTeamSize.");
+            return outcome;
+        }
+
+        var preferredCount = ChoosePreferredTeamCount(totalStudents, settings, candidateCounts);
+        outcome.TeamSizes.AddRange(BuildBalancedTeamSizes(totalStudents, preferredCount));
+
+        return outcome;
+    }
+
+    private static IReadOnlyList<RandomTeamPreviewTeamResponse> BuildRandomPreviewTeams(
+        IReadOnlyList<Guid> studentIds,
+        IReadOnlyList<int> teamSizes)
+    {
+        var shuffledStudents = studentIds.ToList();
+        Shuffle(shuffledStudents);
+
+        var teams = new List<RandomTeamPreviewTeamResponse>(teamSizes.Count);
+        var index = 0;
+
+        foreach (var teamSize in teamSizes)
+        {
+            teams.Add(new RandomTeamPreviewTeamResponse
+            {
+                MemberIds = shuffledStudents
+                    .Skip(index)
+                    .Take(teamSize)
+                    .ToList()
+            });
+
+            index += teamSize;
+        }
+
+        return teams;
+    }
+
+    private static List<int> BuildBalancedTeamSizes(int totalStudents, int teamsCount)
+    {
+        var baseSize = totalStudents / teamsCount;
+        var remainder = totalStudents % teamsCount;
+        var teamSizes = new List<int>(teamsCount);
+
+        for (var index = 0; index < teamsCount; index++)
+        {
+            teamSizes.Add(index < remainder ? baseSize + 1 : baseSize);
+        }
+
+        return teamSizes;
+    }
+
+    private static RandomTeamDistributionSuggestionResponse BuildRandomSuggestion(int totalStudents, SettingsSnapshot settings)
+    {
+        var boundsOnlySettings = new SettingsSnapshot(
+            TeamDistributionMode.Random,
+            null,
+            null,
+            settings.MinTeamSize,
+            settings.MaxTeamSize);
+
+        var candidateCounts = GetBalancedTeamCounts(totalStudents, boundsOnlySettings);
+
+        if (candidateCounts.Count == 0)
+        {
+            candidateCounts = Enumerable.Range(1, totalStudents).ToList();
+        }
+
+        var preferredCount = settings.FixedTeamsCount.HasValue && settings.FixedTeamsCount.Value > 0
+            ? Math.Clamp(settings.FixedTeamsCount.Value, 1, totalStudents)
+            : ChoosePreferredTeamCount(totalStudents, settings, candidateCounts);
+
+        var chosenCount = candidateCounts
+            .OrderBy(count => Math.Abs(count - preferredCount))
+            .ThenBy(count => totalStudents % count == 0 ? 0 : 1)
+            .ThenBy(count => count)
+            .First();
+
+        var teamSizes = BuildBalancedTeamSizes(totalStudents, chosenCount);
+        var minTeamSize = teamSizes.Min();
+        var maxTeamSize = teamSizes.Max();
+
+        return new RandomTeamDistributionSuggestionResponse
+        {
+            SuggestedTeamsCount = chosenCount,
+            SuggestedMinTeamSize = minTeamSize,
+            SuggestedMaxTeamSize = maxTeamSize,
+            SuggestedFixedTeamSize = minTeamSize == maxTeamSize ? minTeamSize : null,
+            SuggestedTeamSizes = teamSizes
+        };
+    }
+
+    private static List<int> GetBalancedTeamCounts(int totalStudents, SettingsSnapshot settings)
+    {
+        var counts = new List<int>();
+
+        for (var teamsCount = 1; teamsCount <= totalStudents; teamsCount++)
+        {
+            var minSize = totalStudents / teamsCount;
+            var maxSize = minSize + (totalStudents % teamsCount == 0 ? 0 : 1);
+
+            if (!IsWithinRange(minSize, settings) || !IsWithinRange(maxSize, settings))
+            {
+                continue;
+            }
+
+            counts.Add(teamsCount);
+        }
+
+        return counts;
+    }
+
+    private static int ChoosePreferredTeamCount(int totalStudents, SettingsSnapshot settings, IReadOnlyList<int> candidateCounts)
+    {
+        var targetTeamSize = GetTargetTeamSize(totalStudents, settings);
+        var targetCount = Math.Clamp((int)Math.Round(totalStudents / (double)targetTeamSize), 1, totalStudents);
+
+        return candidateCounts
+            .OrderBy(count => totalStudents % count == 0 ? 0 : 1)
+            .ThenBy(count => Math.Abs(count - targetCount))
+            .ThenBy(count => Math.Abs((totalStudents / (double)count) - targetTeamSize))
+            .ThenBy(count => count)
+            .First();
+    }
+
+    private static int GetTargetTeamSize(int totalStudents, SettingsSnapshot settings)
+    {
+        if (settings.FixedTeamSize.HasValue && settings.FixedTeamSize.Value > 0)
+        {
+            return settings.FixedTeamSize.Value;
+        }
+
+        if (settings.MinTeamSize.HasValue && settings.MaxTeamSize.HasValue
+            && settings.MinTeamSize.Value > 0
+            && settings.MaxTeamSize.Value > 0)
+        {
+            return Math.Max(1, (int)Math.Round((settings.MinTeamSize.Value + settings.MaxTeamSize.Value) / 2d));
+        }
+
+        if (settings.MinTeamSize.HasValue && settings.MinTeamSize.Value > 0)
+        {
+            return settings.MinTeamSize.Value;
+        }
+
+        if (settings.MaxTeamSize.HasValue && settings.MaxTeamSize.Value > 0)
+        {
+            return settings.MaxTeamSize.Value;
+        }
+
+        return Math.Max(2, (int)Math.Round(Math.Sqrt(totalStudents)));
+    }
+
+    private static bool IsWithinRange(int teamSize, SettingsSnapshot settings)
+    {
+        var minTeamSize = settings.MinTeamSize ?? 1;
+        var maxTeamSize = settings.MaxTeamSize ?? int.MaxValue;
+        return teamSize >= minTeamSize && teamSize <= maxTeamSize;
+    }
+
+    private static void Shuffle(List<Guid> values)
+    {
+        for (var index = values.Count - 1; index > 0; index--)
+        {
+            var swapIndex = Random.Shared.Next(index + 1);
+            (values[index], values[swapIndex]) = (values[swapIndex], values[index]);
+        }
+    }
+
+    private static bool CanManageManualDistributionInMode(TeamDistributionMode mode)
+    {
+        return mode is TeamDistributionMode.Manual or TeamDistributionMode.Random;
+    }
+
     private async Task<int> GetStudentCountAsync(Guid subjectId, CancellationToken cancellationToken)
     {
         return await _dbContext.SubjectParticipants
@@ -725,6 +1036,12 @@ public sealed class TeamsService : ITeamsService
     {
         public List<string> Errors { get; } = new();
         public List<string> Warnings { get; } = new();
+    }
+
+    private sealed class RandomSizingOutcome
+    {
+        public List<int> TeamSizes { get; } = new();
+        public List<string> Errors { get; } = new();
     }
 
     private readonly record struct SettingsSnapshot(
