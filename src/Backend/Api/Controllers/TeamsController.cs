@@ -71,6 +71,31 @@ public sealed class TeamsController : ControllerBase
         };
     }
 
+    [HttpGet("subjects/{subjectId:guid}/teams/unassigned")]
+    [ProducesResponseType(typeof(UnassignedStudentsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetUnassignedStudents(
+        [FromRoute] Guid subjectId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.GetUnassignedStudentsAsync(userId.Value, subjectId, cancellationToken);
+
+        return result.Status switch
+        {
+            UnassignedStudentsStatus.Success => Ok(result.Response),
+            UnassignedStudentsStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported unassigned students status.")
+        };
+    }
+
     [HttpPost("subjects/{subjectId:guid}/teams/validate")]
     [ProducesResponseType(typeof(TeamValidationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

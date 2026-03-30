@@ -81,6 +81,13 @@ components:
           type: array
           items: { type: string, format: uuid }
 
+    UnassignedStudentsResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        studentIds:
+          type: array
+          items: { type: string, format: uuid }
     ManualTeamDistributionRequest:
       type: object
       properties:
@@ -541,7 +548,7 @@ paths:
   /subjects/{subjectId}/teams/settings:
     put:
       tags: [Teams]
-      summary: Сохранить настройки формирования команд
+      summary: РЎРѕС…СЂР°РЅРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё С„РѕСЂРјРёСЂРѕРІР°РЅРёСЏ РєРѕРјР°РЅРґ
       parameters:
         - name: subjectId
           in: path
@@ -565,13 +572,13 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
   /subjects/{subjectId}/teams:
     get:
       tags: [Teams]
-      summary: Получить список команд предмета
+      summary: РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РєРѕРјР°РЅРґ РїСЂРµРґРјРµС‚Р°
       parameters:
         - name: subjectId
           in: path
@@ -589,11 +596,11 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для участников предмета.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РїСЂРµРґРјРµС‚Р°.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
     post:
       tags: [Teams]
-      summary: Создать одну команду вручную
+      summary: РЎРѕР·РґР°С‚СЊ РѕРґРЅСѓ РєРѕРјР°РЅРґСѓ РІСЂСѓС‡РЅСѓСЋ
       parameters:
         - name: subjectId
           in: path
@@ -617,13 +624,13 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
   /subjects/{subjectId}/teams/{teamId}:
     put:
       tags: [Teams]
-      summary: Обновить состав команды
+      summary: РћР±РЅРѕРІРёС‚СЊ СЃРѕСЃС‚Р°РІ РєРѕРјР°РЅРґС‹
       parameters:
         - name: subjectId
           in: path
@@ -651,12 +658,33 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+  /subjects/{subjectId}/teams/unassigned:
+    get:
+      tags: [Teams]
+      summary: РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РЅРµСЂР°СЃРїСЂРµРґРµР»С‘РЅРЅС‹С… СЃС‚СѓРґРµРЅС‚РѕРІ
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnassignedStudentsResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РїСЂРµРґРјРµС‚Р°.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
   /subjects/{subjectId}/teams/validate:
     post:
       tags: [Teams]
-      summary: Валидировать ручное распределение команд
+      summary: Р’Р°Р»РёРґРёСЂРѕРІР°С‚СЊ СЂСѓС‡РЅРѕРµ СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РєРѕРјР°РЅРґ
       parameters:
         - name: subjectId
           in: path
@@ -677,13 +705,13 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
   /subjects/{subjectId}/teams/manual:
     post:
       tags: [Teams]
-      summary: Ручное распределение команд
+      summary: Р СѓС‡РЅРѕРµ СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РєРѕРјР°РЅРґ
       parameters:
         - name: subjectId
           in: path
@@ -707,13 +735,13 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
   /subjects/{subjectId}/teams/finalize:
     post:
       tags: [Teams]
-      summary: Подтвердить (finalize) распределение команд
+      summary: РџРѕРґС‚РІРµСЂРґРёС‚СЊ СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РєРѕРјР°РЅРґ
       parameters:
         - name: subjectId
           in: path
@@ -734,7 +762,7 @@ paths:
           description: Unauthorized
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
-          description: Forbidden. Только для Teacher/Admin.
+          description: Forbidden. РўРѕР»СЊРєРѕ РґР»СЏ Teacher/Admin.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
   # POSTS (Р›РµРЅС‚Р°: Announcement, Material)
   # ==========================================

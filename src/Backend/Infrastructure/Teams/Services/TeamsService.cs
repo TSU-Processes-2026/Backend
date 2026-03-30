@@ -86,6 +86,44 @@ public sealed class TeamsService : ITeamsService
         return TeamListResult.Success(teams.Select(MapTeam).ToList());
     }
 
+    public async Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await IsParticipantAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return UnassignedStudentsResult.Forbidden();
+        }
+
+        var studentIds = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        if (studentIds.Count == 0)
+        {
+            return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
+            {
+                SubjectId = subjectId,
+                StudentIds = Array.Empty<Guid>()
+            });
+        }
+
+        var assignedIds = await _dbContext.TeamMembers
+            .Where(x => x.Team.SubjectId == subjectId)
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var unassigned = studentIds
+            .Except(assignedIds)
+            .ToList();
+
+        return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
+        {
+            SubjectId = subjectId,
+            StudentIds = unassigned
+        });
+    }
+
     public async Task<TeamValidationResult> ValidateManualDistributionAsync(Guid currentUserId, Guid subjectId, ManualTeamDistributionRequest request, CancellationToken cancellationToken)
     {
         if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
