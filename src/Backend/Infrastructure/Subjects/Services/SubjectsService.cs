@@ -164,6 +164,16 @@ public sealed class SubjectsService : ISubjectsService
         };
 
         _dbContext.SubjectParticipants.Add(participant);
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is not null && settings.IsFinalized)
+        {
+            settings.IsFinalized = false;
+            settings.FinalizedAt = null;
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return JoinSubjectResult.Success(await MapParticipantAsync(participant, cancellationToken));
@@ -216,6 +226,15 @@ public sealed class SubjectsService : ISubjectsService
         else
         {
             existing.Role = request.Role!;
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is not null && settings.IsFinalized)
+        {
+            settings.IsFinalized = false;
+            settings.FinalizedAt = null;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

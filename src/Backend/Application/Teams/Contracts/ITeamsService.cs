@@ -1,0 +1,15 @@
+using Application.Teams.Models;
+
+namespace Application.Teams.Contracts;
+
+public interface ITeamsService
+{
+    Task<TeamSettingsResult> UpdateSettingsAsync(Guid currentUserId, Guid subjectId, TeamSettingsRequest request, CancellationToken cancellationToken);
+    Task<TeamListResult> GetTeamsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
+    Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
+    Task<TeamValidationResult> ValidateManualDistributionAsync(Guid currentUserId, Guid subjectId, ManualTeamDistributionRequest request, CancellationToken cancellationToken);
+    Task<TeamCreateResult> CreateManualDistributionAsync(Guid currentUserId, Guid subjectId, ManualTeamDistributionRequest request, CancellationToken cancellationToken);
+    Task<TeamMutationResult> CreateTeamAsync(Guid currentUserId, Guid subjectId, ManualTeamRequest request, CancellationToken cancellationToken);
+    Task<TeamMutationResult> UpdateTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, ManualTeamRequest request, CancellationToken cancellationToken);
+    Task<TeamFinalizeResult> FinalizeAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
+}
