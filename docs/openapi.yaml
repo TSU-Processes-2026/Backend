@@ -88,12 +88,21 @@ components:
         studentIds:
           type: array
           items: { type: string, format: uuid }
+        students:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
     ManualTeamDistributionRequest:
       type: object
       properties:
         teams:
           type: array
           items: { $ref: '#/components/schemas/ManualTeamRequest' }
+
+    TeamMember:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        username: { type: string }
 
     Team:
       type: object
@@ -103,6 +112,9 @@ components:
         memberIds:
           type: array
           items: { type: string, format: uuid }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
 
     TeamDistributionResponse:
       type: object
@@ -581,6 +593,29 @@ paths:
   # TEAMS
   # ==========================================
   /subjects/{subjectId}/teams/settings:
+    get:
+      tags: [Teams]
+      summary: Get team settings
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSettingsResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Teacher/Admin only.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
     put:
       tags: [Teams]
       summary: Сохранить настройки формирования команд
