@@ -21,6 +21,46 @@ public sealed class TeamsService : ITeamsService
         _timeProvider = timeProvider;
     }
 
+    public async Task<TeamSettingsResult> GetSettingsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return TeamSettingsResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        var snapshot = SettingsSnapshot.From(settings);
+        var errors = ValidateSettings(snapshot);
+
+        if (errors.Count > 0)
+        {
+            return TeamSettingsResult.Invalid(errors);
+        }
+
+        var studentCount = await GetStudentCountAsync(subjectId, cancellationToken);
+        var warnings = GetFeasibilityWarnings(studentCount, snapshot);
+
+        if (settings is null)
+        {
+            return TeamSettingsResult.Success(new TeamSettingsResponse
+            {
+                SubjectId = subjectId,
+                DistributionMode = snapshot.DistributionMode,
+                FixedTeamsCount = snapshot.FixedTeamsCount,
+                FixedTeamSize = snapshot.FixedTeamSize,
+                MinTeamSize = snapshot.MinTeamSize,
+                MaxTeamSize = snapshot.MaxTeamSize,
+                IsFinalized = false,
+                FinalizedAt = null,
+                Warnings = warnings
+            });
+        }
+
+        return TeamSettingsResult.Success(MapSettings(settings, warnings));
+    }
+
     public async Task<TeamSettingsResult> UpdateSettingsAsync(Guid currentUserId, Guid subjectId, TeamSettingsRequest request, CancellationToken cancellationToken)
     {
         if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
@@ -83,7 +123,11 @@ public sealed class TeamsService : ITeamsService
 
         var teams = await LoadTeamsAsync(subjectId, cancellationToken);
 
-        return TeamListResult.Success(teams.Select(MapTeam).ToList());
+        var usernames = await LoadUsernamesAsync(
+            teams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
+
+        return TeamListResult.Success(teams.Select(team => MapTeam(team, usernames)).ToList());
     }
 
     public async Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
@@ -103,7 +147,8 @@ public sealed class TeamsService : ITeamsService
             return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
             {
                 SubjectId = subjectId,
-                StudentIds = Array.Empty<Guid>()
+                StudentIds = Array.Empty<Guid>(),
+                Students = Array.Empty<TeamMemberResponse>()
             });
         }
 
@@ -113,14 +158,29 @@ public sealed class TeamsService : ITeamsService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var unassigned = studentIds
+        var unassignedIds = studentIds
             .Except(assignedIds)
             .ToList();
+
+        var unassigned = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole && unassignedIds.Contains(x.UserId))
+            .Join(
+                _dbContext.Users,
+                participant => participant.UserId,
+                user => user.Id,
+                (participant, user) => new TeamMemberResponse
+                {
+                    UserId = participant.UserId,
+                    Username = user.UserName ?? string.Empty
+                })
+            .OrderBy(x => x.UserId)
+            .ToListAsync(cancellationToken);
 
         return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
         {
             SubjectId = subjectId,
-            StudentIds = unassigned
+            StudentIds = unassignedIds,
+            Students = unassigned
         });
     }
 
@@ -234,6 +294,8 @@ public sealed class TeamsService : ITeamsService
             _dbContext.Teams.RemoveRange(existingTeams);
         }
 
+        var memberIds = request.Teams.SelectMany(team => team.MemberIds).ToList();
+        var usernames = await LoadUsernamesAsync(memberIds, cancellationToken);
         var resultTeams = new List<TeamResponse>();
 
         foreach (var teamRequest in request.Teams)
@@ -262,7 +324,10 @@ public sealed class TeamsService : ITeamsService
             {
                 Id = team.Id,
                 SubjectId = subjectId,
-                MemberIds = teamRequest.MemberIds.ToList()
+                MemberIds = teamRequest.MemberIds.ToList(),
+                Members = teamRequest.MemberIds
+                    .Select(memberId => MapMember(memberId, usernames))
+                    .ToList()
             });
         }
 
@@ -364,10 +429,13 @@ public sealed class TeamsService : ITeamsService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
 
         return TeamMutationResult.Success(new TeamDistributionResponse
         {
-            Teams = resultTeams.Select(MapTeam).ToList(),
+            Teams = resultTeams.Select(team => MapTeam(team, resultUsernames)).ToList(),
             Warnings = outcome.Warnings
         });
     }
@@ -441,10 +509,13 @@ public sealed class TeamsService : ITeamsService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
 
         return TeamMutationResult.Success(new TeamDistributionResponse
         {
-            Teams = resultTeams.Select(MapTeam).ToList(),
+            Teams = resultTeams.Select(team => MapTeam(team, resultUsernames)).ToList(),
             Warnings = outcome.Warnings
         });
     }
@@ -1022,13 +1093,41 @@ public sealed class TeamsService : ITeamsService
             .ToListAsync(cancellationToken);
     }
 
-    private static TeamResponse MapTeam(Team team)
+    private async Task<Dictionary<Guid, string>> LoadUsernamesAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var ids = userIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _dbContext.Users
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.UserName })
+            .ToDictionaryAsync(x => x.Id, x => x.UserName ?? string.Empty, cancellationToken);
+    }
+
+    private static TeamResponse MapTeam(Team team, IReadOnlyDictionary<Guid, string> usernames)
     {
         return new TeamResponse
         {
             Id = team.Id,
             SubjectId = team.SubjectId,
-            MemberIds = team.Members.Select(member => member.UserId).ToList()
+            MemberIds = team.Members.Select(member => member.UserId).ToList(),
+            Members = team.Members.Select(member => MapMember(member.UserId, usernames)).ToList()
+        };
+    }
+
+    private static TeamMemberResponse MapMember(Guid userId, IReadOnlyDictionary<Guid, string> usernames)
+    {
+        return new TeamMemberResponse
+        {
+            UserId = userId,
+            Username = usernames.TryGetValue(userId, out var username) ? username : string.Empty
         };
     }
 

@@ -18,6 +18,33 @@ public sealed class TeamsController : ControllerBase
         _teamsService = teamsService;
     }
 
+    [HttpGet("subjects/{subjectId:guid}/teams/settings")]
+    [ProducesResponseType(typeof(TeamSettingsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetSettings(
+        [FromRoute] Guid subjectId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.GetSettingsAsync(userId.Value, subjectId, cancellationToken);
+
+        return result.Status switch
+        {
+            TeamSettingsStatus.Success => Ok(result.Settings),
+            TeamSettingsStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            TeamSettingsStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported team settings status.")
+        };
+    }
+
     [HttpPut("subjects/{subjectId:guid}/teams/settings")]
     [ProducesResponseType(typeof(TeamSettingsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
