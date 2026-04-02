@@ -4,6 +4,7 @@ namespace Application.Teams.Contracts;
 
 public interface ITeamsService
 {
+    Task<TeamSettingsResult> GetSettingsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
     Task<TeamSettingsResult> UpdateSettingsAsync(Guid currentUserId, Guid subjectId, TeamSettingsRequest request, CancellationToken cancellationToken);
     Task<TeamListResult> GetTeamsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
     Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
