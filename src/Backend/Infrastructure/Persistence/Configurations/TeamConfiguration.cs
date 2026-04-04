@@ -19,6 +19,10 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.SubjectId)
             .IsRequired();
 
+        builder.Property(x => x.Name)
+            .IsRequired(false)
+            .HasMaxLength(200);
+
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
