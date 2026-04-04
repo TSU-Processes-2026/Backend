@@ -27,6 +27,7 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<SubjectTeamSettings> SubjectTeamSettings => Set<SubjectTeamSettings>();
+    public DbSet<DraftState> DraftStates => Set<DraftState>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
