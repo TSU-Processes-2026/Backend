@@ -1507,6 +1507,226 @@ public sealed class TeamsService : ITeamsService
                 .ToList()
         };
     }
+    public async Task<TeamMutationResult> StudentCreateTeamAsync(Guid currentUserId, Guid subjectId, StudentCreateTeamRequest request, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return TeamMutationResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return TeamMutationResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return TeamMutationResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        var alreadyInTeam = await _dbContext.TeamMembers
+            .AnyAsync(x => x.Team.SubjectId == subjectId && x.UserId == currentUserId, cancellationToken);
+
+        if (alreadyInTeam)
+        {
+            return TeamMutationResult.Invalid(new[] { "You are already a member of a team." });
+        }
+
+        var snapshot = SettingsSnapshot.From(settings);
+        if (snapshot.FixedTeamsCount.HasValue)
+        {
+            var currentTeamsCount = await _dbContext.Teams
+                .CountAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+            if (currentTeamsCount >= snapshot.FixedTeamsCount.Value)
+            {
+                return TeamMutationResult.Invalid(new[] { $"Maximum number of teams ({snapshot.FixedTeamsCount.Value}) has been reached." });
+            }
+        }
+
+        var subject = await _dbContext.Subjects.SingleAsync(x => x.Id == subjectId, cancellationToken);
+
+        var team = new Team
+        {
+            Id = Guid.NewGuid(),
+            SubjectId = subjectId,
+            Name = request.Name,
+            CreatedAt = _timeProvider.GetUtcNow(),
+            Subject = subject
+        };
+
+        team.Members = new List<TeamMember>
+        {
+            new TeamMember
+            {
+                Id = Guid.NewGuid(),
+                TeamId = team.Id,
+                UserId = currentUserId,
+                IsCaptain = true,
+                Team = team
+            }
+        };
+
+        _dbContext.Teams.Add(team);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return TeamMutationResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    public async Task<StudentJoinTeamResult> StudentJoinTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return StudentJoinTeamResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        // Check if student is already in a team
+        var alreadyInTeam = await _dbContext.TeamMembers
+            .AnyAsync(x => x.Team.SubjectId == subjectId && x.UserId == currentUserId, cancellationToken);
+
+        if (alreadyInTeam)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "You are already a member of a team." });
+        }
+
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .SingleOrDefaultAsync(x => x.Id == teamId && x.SubjectId == subjectId, cancellationToken);
+
+        if (team is null)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Team not found." });
+        }
+
+        var snapshot = SettingsSnapshot.From(settings);
+        var maxSize = snapshot.FixedTeamSize ?? snapshot.MaxTeamSize;
+
+        if (maxSize.HasValue && team.Members.Count >= maxSize.Value)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { $"Team has reached maximum size ({maxSize.Value})." });
+        }
+
+        team.Members.Add(new TeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team.Id,
+            UserId = currentUserId,
+            IsCaptain = false,
+            Team = team
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return StudentJoinTeamResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    public async Task<StudentLeaveTeamResult> StudentLeaveTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return StudentLeaveTeamResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .SingleOrDefaultAsync(x => x.Id == teamId && x.SubjectId == subjectId, cancellationToken);
+
+        if (team is null)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Team not found." });
+        }
+
+        var member = team.Members.SingleOrDefault(m => m.UserId == currentUserId);
+        if (member is null)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "You are not a member of this team." });
+        }
+
+        if (member.IsCaptain)
+        {
+            // Captain can only leave if they are the only member
+            if (team.Members.Count > 1)
+            {
+                return StudentLeaveTeamResult.Invalid(new[] { "Captain cannot leave the team while other members are present." });
+            }
+
+            // Captain is alone — delete the whole team
+            _dbContext.Teams.Remove(team);
+        }
+        else
+        {
+            _dbContext.TeamMembers.Remove(member);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return StudentLeaveTeamResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    private async Task<bool> IsStudentAsync(Guid userId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.SubjectParticipants
+            .AnyAsync(
+                x => x.SubjectId == subjectId
+                     && x.UserId == userId
+                     && x.Role == StudentRole,
+                cancellationToken);
     }
 
     private sealed class ValidationOutcome
