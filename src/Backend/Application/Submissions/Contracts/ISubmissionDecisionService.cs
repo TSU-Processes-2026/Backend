@@ -39,4 +39,8 @@ public interface ISubmissionDecisionService
         CancellationToken cancellationToken = default);
 
     Task CloseExpiredDecisionSessionsAsync(CancellationToken cancellationToken = default);
+
+    Task<bool> HasActiveDecisionSessionsForSubjectAsync(Guid subjectId, CancellationToken cancellationToken = default);
+
+    Task<int> CloseActiveSessionsForTeamWithoutCaptainAsync(Guid teamId, CancellationToken cancellationToken = default);
 }

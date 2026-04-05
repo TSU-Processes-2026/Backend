@@ -39,4 +39,8 @@ public interface ICaptainSelectionService
         CancellationToken cancellationToken = default);
 
     Task CloseExpiredVotingSessionsAsync(CancellationToken cancellationToken = default);
+
+    Task<bool> HasActiveVotingSessionsForSubjectAsync(
+        Guid subjectId,
+        CancellationToken cancellationToken = default);
 }
