@@ -4,6 +4,7 @@ using Application.Comments.Contracts;
 using Application.Auth.Options;
 using Application.Posts.Contracts;
 using Application.Subjects.Contracts;
+using Application.Submissions.Contracts;
 using Application.Teams.Contracts;
 using Application.Users.Contracts;
 using Infrastructure.Assignments.Services;
@@ -16,6 +17,7 @@ using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Infrastructure.Posts.Services;
 using Infrastructure.Subjects.Services;
+using Infrastructure.Submissions.Services;
 using Infrastructure.Teams.Services;
 using Infrastructure.Users.Services;
 using Microsoft.AspNetCore.Identity;
@@ -74,6 +76,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IAssignmentsService, AssignmentsService>();
         services.AddScoped<ITeamsService, TeamsService>();
         services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
+        services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
         services.AddScoped<IUsersService, UsersService>();
 
         return services;
