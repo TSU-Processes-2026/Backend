@@ -9,6 +9,7 @@ using Application.Teams.Contracts;
 using Application.Users.Contracts;
 using Infrastructure.Assignments.Services;
 using Infrastructure.Auth.Services;
+using Infrastructure.BackgroundJobs;
 using Infrastructure.Comments.Services;
 using Infrastructure.Files.Contracts;
 using Infrastructure.Files.Options;
@@ -78,6 +79,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
         services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
         services.AddScoped<IUsersService, UsersService>();
+
+        services.AddHostedService<ExpiredSessionsCleanupService>();
 
         return services;
     }
