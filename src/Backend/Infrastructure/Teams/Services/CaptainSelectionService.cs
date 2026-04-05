@@ -369,6 +369,16 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         }
     }
 
+    public async Task<bool> HasActiveVotingSessionsForSubjectAsync(
+        Guid subjectId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.CaptainVotingSessions
+            .AnyAsync(
+                s => !s.IsClosed && s.Team.SubjectId == subjectId,
+                cancellationToken);
+    }
+
     private async Task<Guid?> CalculateWinnerAsync(
         CaptainVotingSession session,
         CancellationToken cancellationToken)
