@@ -453,6 +453,80 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
                 cancellationToken);
     }
 
+    public async Task<bool> HasActiveDecisionSessionsForSubjectAsync(
+        Guid subjectId,
+        CancellationToken cancellationToken = default)
+    {
+        var teamIds = await _dbContext.Teams
+            .Where(t => t.SubjectId == subjectId)
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        if (teamIds.Count == 0)
+        {
+            return false;
+        }
+
+        return await _dbContext.SubmissionDecisionSessions
+            .AnyAsync(
+                s => !s.IsClosed
+                     && _dbContext.Submissions
+                         .Where(sub => sub.id == s.SubmissionId)
+                         .Any(sub => _dbContext.Teams
+                             .Where(t => teamIds.Contains(t.Id))
+                             .Any(t => t.Members.Any(m => m.UserId == sub.post.AuthorId))),
+                cancellationToken);
+    }
+
+    public async Task<int> CloseActiveSessionsForTeamWithoutCaptainAsync(
+        Guid teamId,
+        CancellationToken cancellationToken = default)
+    {
+        var team = await _dbContext.Teams
+            .Include(t => t.Members)
+            .FirstOrDefaultAsync(t => t.Id == teamId, cancellationToken);
+
+        if (team is null)
+        {
+            return 0;
+        }
+
+        var memberIds = team.Members.Select(m => m.UserId).ToList();
+        if (memberIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var activeSessions = await _dbContext.SubmissionDecisionSessions
+            .Include(s => s.Submission)
+                .ThenInclude(sub => sub.post)
+            .Where(s => !s.IsClosed
+                        && s.Mode == SubmissionDecisionMode.CaptainDecides
+                        && memberIds.Contains(s.Submission.post.AuthorId))
+            .ToListAsync(cancellationToken);
+
+        if (activeSessions.Count == 0)
+        {
+            return 0;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        foreach (var session in activeSessions)
+        {
+            session.IsClosed = true;
+            session.ClosedAt = now;
+            session.Result = DecisionResult.Expired;
+
+            _logger.LogInformation(
+                "Decision session {SessionId} closed due to captain removal from team {TeamId}. Result: Expired",
+                session.Id, teamId);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return activeSessions.Count;
+    }
+
     private static DecisionSessionResponse MapSession(SubmissionDecisionSession session)
     {
         return new DecisionSessionResponse(
