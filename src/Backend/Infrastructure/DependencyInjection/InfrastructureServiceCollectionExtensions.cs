@@ -73,6 +73,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPostsService, PostsService>();
         services.AddScoped<IAssignmentsService, AssignmentsService>();
         services.AddScoped<ITeamsService, TeamsService>();
+        services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
         services.AddScoped<IUsersService, UsersService>();
 
         return services;
