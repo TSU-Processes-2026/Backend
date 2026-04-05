@@ -293,6 +293,177 @@ public sealed class TeamsController : ControllerBase
         };
     }
 
+    [HttpPost("subjects/{subjectId:guid}/teams/draft/start")]
+    [ProducesResponseType(typeof(DraftStateResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> StartDraft(
+        [FromRoute] Guid subjectId,
+        [FromBody] DraftStartRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.StartDraftAsync(userId.Value, subjectId, request ?? new DraftStartRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            DraftStartStatus.Success => StatusCode(StatusCodes.Status201Created, result.Response),
+            DraftStartStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            DraftStartStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported draft start status.")
+        };
+    }
+
+    [HttpGet("subjects/{subjectId:guid}/teams/draft/state")]
+    [ProducesResponseType(typeof(DraftStateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDraftState(
+        [FromRoute] Guid subjectId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.GetDraftStateAsync(userId.Value, subjectId, cancellationToken);
+
+        return result.Status switch
+        {
+            DraftStateStatus.Success => Ok(result.Response),
+            DraftStateStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            DraftStateStatus.NotFound => NotFound(new ProblemDetails
+            {
+                Title = "Not Found",
+                Status = StatusCodes.Status404NotFound,
+                Detail = "No draft found for this subject."
+            }),
+            _ => throw new InvalidOperationException("Unsupported draft state status.")
+        };
+    }
+
+    [HttpPost("subjects/{subjectId:guid}/teams/draft/pick")]
+    [ProducesResponseType(typeof(DraftStateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DraftPick(
+        [FromRoute] Guid subjectId,
+        [FromBody] DraftPickRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.DraftPickAsync(userId.Value, subjectId, request ?? new DraftPickRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            DraftPickStatus.Success => Ok(result.Response),
+            DraftPickStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            DraftPickStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported draft pick status.")
+        };
+    }
+    [HttpPost("subjects/{subjectId:guid}/teams/student-create")]
+    [ProducesResponseType(typeof(TeamDistributionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> StudentCreateTeam(
+        [FromRoute] Guid subjectId,
+        [FromBody] StudentCreateTeamRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.StudentCreateTeamAsync(userId.Value, subjectId, request ?? new StudentCreateTeamRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            TeamMutationStatus.Success => StatusCode(StatusCodes.Status201Created, result.Response),
+            TeamMutationStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            TeamMutationStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported student create team status.")
+        };
+    }
+
+    [HttpPost("subjects/{subjectId:guid}/teams/{teamId:guid}/join")]
+    [ProducesResponseType(typeof(TeamDistributionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> StudentJoinTeam(
+        [FromRoute] Guid subjectId,
+        [FromRoute] Guid teamId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.StudentJoinTeamAsync(userId.Value, subjectId, teamId, cancellationToken);
+
+        return result.Status switch
+        {
+            StudentJoinTeamStatus.Success => Ok(result.Response),
+            StudentJoinTeamStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            StudentJoinTeamStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported student join team status.")
+        };
+    }
+
+    [HttpPost("subjects/{subjectId:guid}/teams/{teamId:guid}/leave")]
+    [ProducesResponseType(typeof(TeamDistributionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> StudentLeaveTeam(
+        [FromRoute] Guid subjectId,
+        [FromRoute] Guid teamId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.StudentLeaveTeamAsync(userId.Value, subjectId, teamId, cancellationToken);
+
+        return result.Status switch
+        {
+            StudentLeaveTeamStatus.Success => Ok(result.Response),
+            StudentLeaveTeamStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            StudentLeaveTeamStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            _ => throw new InvalidOperationException("Unsupported student leave team status.")
+        };
+    }
+
     private static ProblemDetails CreateUnauthorized()
     {
         return new ProblemDetails

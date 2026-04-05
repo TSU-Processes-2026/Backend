@@ -7,6 +7,7 @@ public sealed class Team
 {
     public Guid Id { get; set; }
     public Guid SubjectId { get; set; }
+    public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public Guid? CaptainUserId { get; set; }
     public CaptainSelectionMethod? SelectionMethod { get; set; }
