@@ -21,5 +21,7 @@ namespace Infrastructure.Persistence.Entities
         public DateTime submittedAt { get; set; }
         [JsonIgnore]
         public Grade grade { get; set; }
+        [JsonIgnore]
+        public SubmissionDecisionSession? DecisionSession { get; set; }
     }
 }
