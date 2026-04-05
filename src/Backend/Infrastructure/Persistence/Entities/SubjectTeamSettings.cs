@@ -12,5 +12,8 @@ public sealed class SubjectTeamSettings
     public int? MaxTeamSize { get; set; }
     public bool IsFinalized { get; set; }
     public DateTimeOffset? FinalizedAt { get; set; }
+    public CaptainSelectionMethod? CaptainSelectionMode { get; set; }
+    public int? CaptainVotingDeadlineDays { get; set; }
+    public bool RequiresCaptain { get; set; }
     public Subject Subject { get; set; } = null!;
 }
