@@ -29,6 +29,8 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<SubjectTeamSettings> SubjectTeamSettings => Set<SubjectTeamSettings>();
     public DbSet<CaptainVotingSession> CaptainVotingSessions => Set<CaptainVotingSession>();
     public DbSet<CaptainVote> CaptainVotes => Set<CaptainVote>();
+    public DbSet<SubmissionDecisionSession> SubmissionDecisionSessions => Set<SubmissionDecisionSession>();
+    public DbSet<SubmissionDecision> SubmissionDecisions => Set<SubmissionDecision>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
