@@ -14,4 +14,11 @@ public interface ITeamsService
     Task<TeamMutationResult> CreateTeamAsync(Guid currentUserId, Guid subjectId, ManualTeamRequest request, CancellationToken cancellationToken);
     Task<TeamMutationResult> UpdateTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, ManualTeamRequest request, CancellationToken cancellationToken);
     Task<TeamFinalizeResult> FinalizeAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
+
+    Task<DraftStartResult> StartDraftAsync(Guid currentUserId, Guid subjectId, DraftStartRequest request, CancellationToken cancellationToken);
+    Task<DraftStateResult> GetDraftStateAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken);
+    Task<DraftPickResult> DraftPickAsync(Guid currentUserId, Guid subjectId, DraftPickRequest request, CancellationToken cancellationToken);
+    Task<TeamMutationResult> StudentCreateTeamAsync(Guid currentUserId, Guid subjectId, StudentCreateTeamRequest request, CancellationToken cancellationToken);
+    Task<StudentJoinTeamResult> StudentJoinTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken);
+    Task<StudentLeaveTeamResult> StudentLeaveTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken);
 }

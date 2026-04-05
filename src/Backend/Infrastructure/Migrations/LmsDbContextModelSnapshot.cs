@@ -567,6 +567,39 @@ namespace Infrastructure.Migrations
                     b.ToTable("submission_decision_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
+                {
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CaptainOrder")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentCaptainIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CurrentRound")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("SubjectId");
+
+                    b.ToTable("draft_states", (string)null);
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Team", b =>
                 {
                     b.Property<Guid>("Id")
@@ -580,6 +613,10 @@ namespace Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("SelectionMethod")
                         .HasColumnType("text");
@@ -600,6 +637,11 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsCaptain")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("TeamId")
                         .HasColumnType("uuid");
@@ -914,6 +956,17 @@ namespace Infrastructure.Migrations
                     b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
                         .WithOne()
                         .HasForeignKey("Infrastructure.Persistence.Entities.SubjectTeamSettings", "SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
+                {
+                    b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
+                        .WithOne()
+                        .HasForeignKey("Infrastructure.Persistence.Entities.DraftState", "SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
