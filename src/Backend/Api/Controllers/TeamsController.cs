@@ -74,7 +74,7 @@ public sealed class TeamsController : ControllerBase
     }
 
     [HttpGet("subjects/{subjectId:guid}/teams")]
-    [ProducesResponseType(typeof(IReadOnlyList<TeamResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(TeamsListWithConfigResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTeams(
@@ -92,7 +92,12 @@ public sealed class TeamsController : ControllerBase
 
         return result.Status switch
         {
-            TeamListStatus.Success => Ok(result.Teams),
+            TeamListStatus.Success => Ok(new TeamsListWithConfigResponse
+            {
+                Teams = result.Teams,
+                DistributionMode = result.DistributionMode,
+                IsFinalized = result.IsFinalized
+            }),
             TeamListStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
             _ => throw new InvalidOperationException("Unsupported team list status.")
         };
@@ -353,6 +358,15 @@ public sealed class TeamsController : ControllerBase
         };
     }
 
+    /// <summary>
+    /// Pick a student during a draft round.
+    /// The current captain (whose turn it is) picks an unassigned student to add to their own team.
+    /// Teachers/admins can also make picks on behalf of the current captain.
+    /// </summary>
+    /// <param name="subjectId">The subject ID.</param>
+    /// <param name="request">The pick request containing the student ID to pick.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The updated draft state.</returns>
     [HttpPost("subjects/{subjectId:guid}/teams/draft/pick")]
     [ProducesResponseType(typeof(DraftStateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -380,6 +394,7 @@ public sealed class TeamsController : ControllerBase
             _ => throw new InvalidOperationException("Unsupported draft pick status.")
         };
     }
+
     [HttpPost("subjects/{subjectId:guid}/teams/student-create")]
     [ProducesResponseType(typeof(TeamDistributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

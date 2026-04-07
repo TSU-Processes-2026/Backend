@@ -253,4 +253,101 @@ public sealed class CaptainSelectionServiceTests
         _dbContext.Teams.Add(team);
         await _dbContext.SaveChangesAsync();
     }
+
+    private async Task SetupTeamWithMultipleMembersAsync(
+        Guid subjectId,
+        Guid teamId,
+        params Guid[] memberIds)
+    {
+        var subject = await _dbContext.Subjects.FindAsync(subjectId);
+
+        var team = new Team
+        {
+            Id = teamId,
+            SubjectId = subjectId,
+            CreatedAt = _now,
+            Subject = subject!,
+            Members = new List<TeamMember>()
+        };
+
+        foreach (var memberId in memberIds)
+        {
+            var member = new TeamMember
+            {
+                Id = Guid.NewGuid(),
+                TeamId = teamId,
+                UserId = memberId,
+                IsCaptain = false,
+                Team = team
+            };
+            team.Members.Add(member);
+        }
+
+        _dbContext.Teams.Add(team);
+        await _dbContext.SaveChangesAsync();
+
+        // Clear the change tracker to ensure fresh loads
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task CastVote_ShouldIncludeNewVoteInWinnerCalculation()
+    {
+        // Arrange: Single member team for simplicity
+        var subjectId = Guid.NewGuid();
+        var teacherId = Guid.NewGuid();
+        var teamId = Guid.NewGuid();
+        var member1 = Guid.NewGuid();
+
+        await SetupSubjectWithSettingsAsync(subjectId, teacherId, TeamDistributionMode.Manual);
+        await SetupTeamWithMemberAsync(subjectId, teamId, member1);
+
+        // Initiate voting
+        var initiateResult = await _sut.InitiateVotingAsync(subjectId, teamId, teacherId, CancellationToken.None);
+        initiateResult.Status.Should().Be(CaptainVotingInitiateStatus.Success);
+
+        // Act: The single member votes for themselves
+        var voteResult = await _sut.CastVoteAsync(teamId, member1, member1, CancellationToken.None);
+
+        // Assert: Session should complete and the vote should be counted
+        voteResult.Status.Should().Be(CaptainVoteStatus.Success);
+        voteResult.SessionCompleted.Should().BeTrue();
+        voteResult.SelectedCaptainId.Should().Be(member1);
+
+        // Verify the winner was determined from the vote (not random/empty)
+        var session = await _dbContext.CaptainVotingSessions
+            .Include(s => s.Votes)
+            .FirstAsync(s => s.TeamId == teamId);
+        session.WinnerId.Should().Be(member1);
+
+        // Verify vote was persisted
+        var voteCount = await _dbContext.CaptainVotes.CountAsync(v => v.VotingSessionId == session.Id);
+        voteCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CastVote_AfterSessionCompletes_ShouldReturnNotFound()
+    {
+        // Arrange: Single member team for simplicity
+        var subjectId = Guid.NewGuid();
+        var teacherId = Guid.NewGuid();
+        var teamId = Guid.NewGuid();
+        var member1 = Guid.NewGuid();
+
+        await SetupSubjectWithSettingsAsync(subjectId, teacherId, TeamDistributionMode.Manual);
+        await SetupTeamWithMemberAsync(subjectId, teamId, member1);
+
+        // Initiate voting
+        await _sut.InitiateVotingAsync(subjectId, teamId, teacherId, CancellationToken.None);
+
+        // Cast the only vote - session completes
+        var vote1Result = await _sut.CastVoteAsync(teamId, member1, member1, CancellationToken.None);
+        vote1Result.Status.Should().Be(CaptainVoteStatus.Success);
+        vote1Result.SessionCompleted.Should().BeTrue();
+
+        // Try to vote again after session is closed
+        var vote2Result = await _sut.CastVoteAsync(teamId, member1, member1, CancellationToken.None);
+        // Session is now closed, so should return NotFound (no active session)
+        vote2Result.Status.Should().Be(CaptainVoteStatus.NotFound);
+    }
 }

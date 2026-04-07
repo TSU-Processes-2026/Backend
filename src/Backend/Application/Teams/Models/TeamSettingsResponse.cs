@@ -10,5 +10,8 @@ public sealed class TeamSettingsResponse
     public int? MaxTeamSize { get; init; }
     public bool IsFinalized { get; init; }
     public DateTimeOffset? FinalizedAt { get; init; }
+    public CaptainSelectionMethod? CaptainSelectionMode { get; init; }
+    public int? CaptainVotingDeadlineDays { get; init; }
+    public bool RequiresCaptain { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
