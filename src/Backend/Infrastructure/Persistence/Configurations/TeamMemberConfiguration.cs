@@ -22,6 +22,10 @@ public sealed class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMembe
         builder.Property(x => x.UserId)
             .IsRequired();
 
+        builder.Property(x => x.IsCaptain)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.HasOne(x => x.Team)
             .WithMany(x => x.Members)
             .HasForeignKey(x => x.TeamId)
