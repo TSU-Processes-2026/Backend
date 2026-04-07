@@ -68,6 +68,13 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
 
         var decisionMode = settings.DecisionMode ?? SubmissionDecisionMode.Voting;
 
+        // Voting mode is only allowed when there is no captain
+        if (decisionMode == SubmissionDecisionMode.Voting && team.CaptainUserId is not null)
+        {
+            return DecisionSessionInitiateResult.InvalidOperation("Voting mode is only allowed when the team has no captain.");
+        }
+
+        // CaptainDecides mode requires a captain
         if (decisionMode == SubmissionDecisionMode.CaptainDecides && team.CaptainUserId is null)
         {
             return DecisionSessionInitiateResult.NoCaptain();
