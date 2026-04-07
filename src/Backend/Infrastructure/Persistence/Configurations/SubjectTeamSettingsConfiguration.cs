@@ -37,6 +37,26 @@ public sealed class SubjectTeamSettingsConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.FinalizedAt)
             .IsRequired(false);
 
+        builder.Property(x => x.CaptainSelectionMode)
+            .HasConversion<string>()
+            .IsRequired(false);
+
+        builder.Property(x => x.CaptainVotingDeadlineDays)
+            .IsRequired(false);
+
+        builder.Property(x => x.RequiresCaptain)
+            .IsRequired();
+
+        builder.Property(x => x.DecisionMode)
+            .HasConversion<string>()
+            .IsRequired(false);
+
+        builder.Property(x => x.DecisionDeadlineDays)
+            .IsRequired(false);
+
+        builder.Property(x => x.RequiresDecision)
+            .IsRequired();
+
         builder.HasOne(x => x.Subject)
             .WithOne()
             .HasForeignKey<SubjectTeamSettings>(x => x.SubjectId)

@@ -183,6 +183,67 @@ namespace Infrastructure.Migrations
                     b.ToTable("auth_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.CaptainVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("VotedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VotedForUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VoterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VotingSessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VotedForUserId");
+
+                    b.HasIndex("VoterId");
+
+                    b.HasIndex("VotingSessionId", "VoterId")
+                        .IsUnique();
+
+                    b.ToTable("captain_votes", (string)null);
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.CaptainVotingSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("DeadlineAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("WinnerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WinnerId");
+
+                    b.HasIndex("TeamId", "IsClosed");
+
+                    b.ToTable("captain_voting_sessions", (string)null);
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -365,6 +426,18 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CaptainSelectionMode")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("CaptainVotingDeadlineDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DecisionDeadlineDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DecisionMode")
+                        .HasColumnType("text");
+
                     b.Property<string>("DistributionMode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -386,6 +459,12 @@ namespace Infrastructure.Migrations
 
                     b.Property<int?>("MinTeamSize")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("RequiresCaptain")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RequiresDecision")
+                        .HasColumnType("boolean");
 
                     b.HasKey("SubjectId");
 
@@ -419,18 +498,135 @@ namespace Infrastructure.Migrations
                     b.ToTable("submissions", (string)null);
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.SubmissionDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("DecisionMakerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DecisionSessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecisionMakerId");
+
+                    b.HasIndex("DecisionSessionId", "DecisionMakerId")
+                        .IsUnique();
+
+                    b.ToTable("submission_decisions", (string)null);
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.SubmissionDecisionSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("DeadlineAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId")
+                        .IsUnique();
+
+                    b.HasIndex("IsClosed", "DeadlineAt");
+
+                    b.ToTable("submission_decision_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
+                {
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CaptainOrder")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CurrentCaptainIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CurrentRound")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("SubjectId");
+
+                    b.ToTable("draft_states", (string)null);
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Team", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CaptainSelectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CaptainUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SelectionMethod")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CaptainUserId");
 
                     b.HasIndex("SubjectId");
 
@@ -441,6 +637,11 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsCaptain")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("TeamId")
                         .HasColumnType("uuid");
@@ -634,6 +835,51 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.CaptainVote", b =>
+                {
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", "VotedFor")
+                        .WithMany()
+                        .HasForeignKey("VotedForUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", "Voter")
+                        .WithMany()
+                        .HasForeignKey("VoterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Persistence.Entities.CaptainVotingSession", "VotingSession")
+                        .WithMany("Votes")
+                        .HasForeignKey("VotingSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("VotedFor");
+
+                    b.Navigation("Voter");
+
+                    b.Navigation("VotingSession");
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.CaptainVotingSession", b =>
+                {
+                    b.HasOne("Infrastructure.Persistence.Entities.Team", "Team")
+                        .WithMany("CaptainVotingSessions")
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", "Winner")
+                        .WithMany()
+                        .HasForeignKey("WinnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Team");
+
+                    b.Navigation("Winner");
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Comment", b =>
                 {
                     b.HasOne("Infrastructure.Identity.ApplicationUser", null)
@@ -716,6 +962,17 @@ namespace Infrastructure.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
+                {
+                    b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
+                        .WithOne()
+                        .HasForeignKey("Infrastructure.Persistence.Entities.DraftState", "SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Submission", b =>
                 {
                     b.HasOne("Infrastructure.Persistence.Entities.Post", "post")
@@ -727,13 +984,50 @@ namespace Infrastructure.Migrations
                     b.Navigation("post");
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.SubmissionDecision", b =>
+                {
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", "DecisionMaker")
+                        .WithMany()
+                        .HasForeignKey("DecisionMakerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Persistence.Entities.SubmissionDecisionSession", "DecisionSession")
+                        .WithMany("Decisions")
+                        .HasForeignKey("DecisionSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DecisionMaker");
+
+                    b.Navigation("DecisionSession");
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.SubmissionDecisionSession", b =>
+                {
+                    b.HasOne("Infrastructure.Persistence.Entities.Submission", "Submission")
+                        .WithOne("DecisionSession")
+                        .HasForeignKey("Infrastructure.Persistence.Entities.SubmissionDecisionSession", "SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Team", b =>
                 {
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", "Captain")
+                        .WithMany()
+                        .HasForeignKey("CaptainUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
                         .WithMany()
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Captain");
 
                     b.Navigation("Subject");
                 });
@@ -823,6 +1117,11 @@ namespace Infrastructure.Migrations
                     b.Navigation("RefreshTokens");
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.CaptainVotingSession", b =>
+                {
+                    b.Navigation("Votes");
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Post", b =>
                 {
                     b.Navigation("Questions");
@@ -837,14 +1136,23 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Submission", b =>
                 {
+                    b.Navigation("DecisionSession");
+
                     b.Navigation("answers");
 
                     b.Navigation("grade")
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.SubmissionDecisionSession", b =>
+                {
+                    b.Navigation("Decisions");
+                });
+
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Team", b =>
                 {
+                    b.Navigation("CaptainVotingSessions");
+
                     b.Navigation("Members");
                 });
 #pragma warning restore 612, 618

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Application.Teams.Contracts;
 using Application.Teams.Models;
 using Infrastructure.Persistence;
@@ -19,6 +20,46 @@ public sealed class TeamsService : ITeamsService
     {
         _dbContext = dbContext;
         _timeProvider = timeProvider;
+    }
+
+    public async Task<TeamSettingsResult> GetSettingsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return TeamSettingsResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        var snapshot = SettingsSnapshot.From(settings);
+        var errors = ValidateSettings(snapshot);
+
+        if (errors.Count > 0)
+        {
+            return TeamSettingsResult.Invalid(errors);
+        }
+
+        var studentCount = await GetStudentCountAsync(subjectId, cancellationToken);
+        var warnings = GetFeasibilityWarnings(studentCount, snapshot);
+
+        if (settings is null)
+        {
+            return TeamSettingsResult.Success(new TeamSettingsResponse
+            {
+                SubjectId = subjectId,
+                DistributionMode = snapshot.DistributionMode,
+                FixedTeamsCount = snapshot.FixedTeamsCount,
+                FixedTeamSize = snapshot.FixedTeamSize,
+                MinTeamSize = snapshot.MinTeamSize,
+                MaxTeamSize = snapshot.MaxTeamSize,
+                IsFinalized = false,
+                FinalizedAt = null,
+                Warnings = warnings
+            });
+        }
+
+        return TeamSettingsResult.Success(MapSettings(settings, warnings));
     }
 
     public async Task<TeamSettingsResult> UpdateSettingsAsync(Guid currentUserId, Guid subjectId, TeamSettingsRequest request, CancellationToken cancellationToken)
@@ -83,7 +124,11 @@ public sealed class TeamsService : ITeamsService
 
         var teams = await LoadTeamsAsync(subjectId, cancellationToken);
 
-        return TeamListResult.Success(teams.Select(MapTeam).ToList());
+        var usernames = await LoadUsernamesAsync(
+            teams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
+
+        return TeamListResult.Success(teams.Select(team => MapTeam(team, usernames)).ToList());
     }
 
     public async Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
@@ -103,7 +148,8 @@ public sealed class TeamsService : ITeamsService
             return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
             {
                 SubjectId = subjectId,
-                StudentIds = Array.Empty<Guid>()
+                StudentIds = Array.Empty<Guid>(),
+                Students = Array.Empty<TeamMemberResponse>()
             });
         }
 
@@ -113,14 +159,29 @@ public sealed class TeamsService : ITeamsService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var unassigned = studentIds
+        var unassignedIds = studentIds
             .Except(assignedIds)
             .ToList();
+
+        var unassigned = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole && unassignedIds.Contains(x.UserId))
+            .Join(
+                _dbContext.Users,
+                participant => participant.UserId,
+                user => user.Id,
+                (participant, user) => new TeamMemberResponse
+                {
+                    UserId = participant.UserId,
+                    Username = user.UserName ?? string.Empty
+                })
+            .OrderBy(x => x.UserId)
+            .ToListAsync(cancellationToken);
 
         return UnassignedStudentsResult.Success(new UnassignedStudentsResponse
         {
             SubjectId = subjectId,
-            StudentIds = unassigned
+            StudentIds = unassignedIds,
+            Students = unassigned
         });
     }
 
@@ -234,6 +295,8 @@ public sealed class TeamsService : ITeamsService
             _dbContext.Teams.RemoveRange(existingTeams);
         }
 
+        var memberIds = request.Teams.SelectMany(team => team.MemberIds).ToList();
+        var usernames = await LoadUsernamesAsync(memberIds, cancellationToken);
         var resultTeams = new List<TeamResponse>();
 
         foreach (var teamRequest in request.Teams)
@@ -262,7 +325,10 @@ public sealed class TeamsService : ITeamsService
             {
                 Id = team.Id,
                 SubjectId = subjectId,
-                MemberIds = teamRequest.MemberIds.ToList()
+                MemberIds = teamRequest.MemberIds.ToList(),
+                Members = teamRequest.MemberIds
+                    .Select(memberId => MapMember(memberId, usernames))
+                    .ToList()
             });
         }
 
@@ -364,10 +430,13 @@ public sealed class TeamsService : ITeamsService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
 
         return TeamMutationResult.Success(new TeamDistributionResponse
         {
-            Teams = resultTeams.Select(MapTeam).ToList(),
+            Teams = resultTeams.Select(team => MapTeam(team, resultUsernames)).ToList(),
             Warnings = outcome.Warnings
         });
     }
@@ -441,10 +510,13 @@ public sealed class TeamsService : ITeamsService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(team => team.Members.Select(member => member.UserId)),
+            cancellationToken);
 
         return TeamMutationResult.Success(new TeamDistributionResponse
         {
-            Teams = resultTeams.Select(MapTeam).ToList(),
+            Teams = resultTeams.Select(team => MapTeam(team, resultUsernames)).ToList(),
             Warnings = outcome.Warnings
         });
     }
@@ -458,11 +530,6 @@ public sealed class TeamsService : ITeamsService
 
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
-
-        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
-        {
-            return TeamFinalizeResult.Forbidden();
-        }
 
         var teams = await _dbContext.Teams
             .Include(x => x.Members)
@@ -1022,14 +1089,644 @@ public sealed class TeamsService : ITeamsService
             .ToListAsync(cancellationToken);
     }
 
-    private static TeamResponse MapTeam(Team team)
+    private async Task<Dictionary<Guid, string>> LoadUsernamesAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken)
     {
+        var ids = userIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _dbContext.Users
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.UserName })
+            .ToDictionaryAsync(x => x.Id, x => x.UserName ?? string.Empty, cancellationToken);
+    }
+
+    private static TeamResponse MapTeam(Team team, IReadOnlyDictionary<Guid, string> usernames)
+    {
+        var captain = team.Members.FirstOrDefault(m => m.IsCaptain);
         return new TeamResponse
         {
             Id = team.Id,
             SubjectId = team.SubjectId,
-            MemberIds = team.Members.Select(member => member.UserId).ToList()
+            Name = team.Name,
+            CaptainId = captain?.UserId,
+            MemberIds = team.Members.Select(member => member.UserId).ToList(),
+            Members = team.Members.Select(member => MapMember(member, usernames)).ToList()
         };
+    }
+
+    private static TeamMemberResponse MapMember(TeamMember member, IReadOnlyDictionary<Guid, string> usernames)
+    {
+        return new TeamMemberResponse
+        {
+            UserId = member.UserId,
+            Username = usernames.TryGetValue(member.UserId, out var username) ? username : string.Empty,
+            IsCaptain = member.IsCaptain
+        };
+    }
+
+    private static TeamMemberResponse MapMember(Guid userId, IReadOnlyDictionary<Guid, string> usernames)
+    {
+        return new TeamMemberResponse
+        {
+            UserId = userId,
+            Username = usernames.TryGetValue(userId, out var username) ? username : string.Empty,
+            IsCaptain = false
+        };
+    }
+
+    public async Task<DraftStartResult> StartDraftAsync(Guid currentUserId, Guid subjectId, DraftStartRequest request, CancellationToken cancellationToken)
+    {
+        if (!await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return DraftStartResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is not null && settings.DistributionMode != TeamDistributionMode.Draft)
+        {
+            return DraftStartResult.Invalid(new[] { "Distribution mode must be Draft." });
+        }
+
+        if (settings is not null && settings.IsFinalized)
+        {
+            return DraftStartResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        var existingDraft = await _dbContext.DraftStates
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (existingDraft is not null && existingDraft.IsActive)
+        {
+            return DraftStartResult.Invalid(new[] { "A draft is already in progress." });
+        }
+
+        var errors = new List<string>();
+
+        if (request.CaptainIds.Count == 0)
+        {
+            errors.Add("At least one captain must be specified.");
+            return DraftStartResult.Invalid(errors);
+        }
+
+        if (request.CaptainIds.Distinct().Count() != request.CaptainIds.Count)
+        {
+            errors.Add("Captain IDs must be unique.");
+        }
+
+        var studentIds = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        var nonStudentCaptains = request.CaptainIds.Except(studentIds).ToList();
+        if (nonStudentCaptains.Count > 0)
+        {
+            errors.Add("All captains must be students of the subject.");
+        }
+
+        var snapshot = SettingsSnapshot.From(settings);
+        var teamsCount = request.CaptainIds.Count;
+
+        if (snapshot.FixedTeamsCount.HasValue && snapshot.FixedTeamsCount.Value != teamsCount)
+        {
+            errors.Add($"Number of captains ({teamsCount}) must match FixedTeamsCount ({snapshot.FixedTeamsCount.Value}).");
+        }
+
+        var nonCaptainStudents = studentIds.Except(request.CaptainIds).ToList();
+        var studentsPerTeam = teamsCount > 0 ? (nonCaptainStudents.Count + teamsCount) / teamsCount : 0;
+
+        if (snapshot.MaxTeamSize.HasValue && studentsPerTeam > snapshot.MaxTeamSize.Value && teamsCount > 0)
+        {
+            var minTeamsNeeded = (int)Math.Ceiling((double)(studentIds.Count) / snapshot.MaxTeamSize.Value);
+            if (teamsCount < minTeamsNeeded)
+            {
+                errors.Add($"Not enough captains to fit all students within MaxTeamSize ({snapshot.MaxTeamSize.Value}). At least {minTeamsNeeded} captains needed.");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return DraftStartResult.Invalid(errors);
+        }
+
+        var existingTeams = await _dbContext.Teams
+            .Where(x => x.SubjectId == subjectId)
+            .ToListAsync(cancellationToken);
+        if (existingTeams.Count > 0)
+        {
+            _dbContext.Teams.RemoveRange(existingTeams);
+        }
+
+        var subject = await _dbContext.Subjects.SingleAsync(x => x.Id == subjectId, cancellationToken);
+        var captainOrder = request.CaptainIds.ToList();
+
+        foreach (var captainId in captainOrder)
+        {
+            var team = new Team
+            {
+                Id = Guid.NewGuid(),
+                SubjectId = subjectId,
+                CreatedAt = _timeProvider.GetUtcNow(),
+                Subject = subject
+            };
+
+            team.Members = new List<TeamMember>
+            {
+                new TeamMember
+                {
+                    Id = Guid.NewGuid(),
+                    TeamId = team.Id,
+                    UserId = captainId,
+                    IsCaptain = true,
+                    Team = team
+                }
+            };
+
+            _dbContext.Teams.Add(team);
+        }
+
+        var settingsEntity = settings ?? new SubjectTeamSettings
+        {
+            SubjectId = subjectId,
+            DistributionMode = TeamDistributionMode.Draft,
+            IsFinalized = false
+        };
+        settingsEntity.DistributionMode = TeamDistributionMode.Draft;
+        settingsEntity.IsFinalized = false;
+        settingsEntity.FinalizedAt = null;
+        if (settings is null)
+        {
+            _dbContext.SubjectTeamSettings.Add(settingsEntity);
+        }
+
+        if (existingDraft is not null)
+        {
+            existingDraft.IsActive = true;
+            existingDraft.IsCompleted = false;
+            existingDraft.CurrentCaptainIndex = 0;
+            existingDraft.CurrentRound = 1;
+            existingDraft.CaptainOrder = JsonSerializer.Serialize(captainOrder);
+            existingDraft.StartedAt = _timeProvider.GetUtcNow();
+            existingDraft.CompletedAt = null;
+        }
+        else
+        {
+            _dbContext.DraftStates.Add(new DraftState
+            {
+                SubjectId = subjectId,
+                IsActive = true,
+                IsCompleted = false,
+                CurrentCaptainIndex = 0,
+                CurrentRound = 1,
+                CaptainOrder = JsonSerializer.Serialize(captainOrder),
+                StartedAt = _timeProvider.GetUtcNow(),
+                CompletedAt = null,
+                Subject = subject
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return DraftStartResult.Success(await BuildDraftStateResponseAsync(subjectId, cancellationToken));
+    }
+
+    public async Task<DraftStateResult> GetDraftStateAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        if (!await IsParticipantAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return DraftStateResult.Forbidden();
+        }
+
+        var draftState = await _dbContext.DraftStates
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (draftState is null)
+        {
+            return DraftStateResult.NotFound();
+        }
+
+        return DraftStateResult.Success(await BuildDraftStateResponseAsync(subjectId, cancellationToken));
+    }
+
+    public async Task<DraftPickResult> DraftPickAsync(Guid currentUserId, Guid subjectId, DraftPickRequest request, CancellationToken cancellationToken)
+    {
+        if (!await IsParticipantAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return DraftPickResult.Forbidden();
+        }
+
+        var draftState = await _dbContext.DraftStates
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (draftState is null || !draftState.IsActive)
+        {
+            return DraftPickResult.Invalid(new[] { "No active draft found." });
+        }
+
+        if (draftState.IsCompleted)
+        {
+            return DraftPickResult.Invalid(new[] { "Draft is already completed." });
+        }
+
+        var captainOrder = JsonSerializer.Deserialize<List<Guid>>(draftState.CaptainOrder) ?? new List<Guid>();
+        if (captainOrder.Count == 0)
+        {
+            return DraftPickResult.Invalid(new[] { "Draft captain order is corrupted." });
+        }
+
+        var currentCaptainId = captainOrder[draftState.CurrentCaptainIndex];
+
+        var isTeacher = await IsTeacherOrAdminAsync(currentUserId, subjectId, cancellationToken);
+        if (currentUserId != currentCaptainId && !isTeacher)
+        {
+            return DraftPickResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+        var snapshot = SettingsSnapshot.From(settings);
+
+        var studentId = request.StudentId;
+        var isStudent = await _dbContext.SubjectParticipants
+            .AnyAsync(x => x.SubjectId == subjectId && x.UserId == studentId && x.Role == StudentRole, cancellationToken);
+
+        if (!isStudent)
+        {
+            return DraftPickResult.Invalid(new[] { "Selected user is not a student of this subject." });
+        }
+
+        var isAlreadyAssigned = await _dbContext.TeamMembers
+            .AnyAsync(x => x.Team.SubjectId == subjectId && x.UserId == studentId, cancellationToken);
+
+        if (isAlreadyAssigned)
+        {
+            return DraftPickResult.Invalid(new[] { "Student is already assigned to a team." });
+        }
+
+        var captainTeam = await _dbContext.Teams
+            .Include(x => x.Members)
+            .Where(x => x.SubjectId == subjectId && x.Members.Any(m => m.UserId == currentCaptainId && m.IsCaptain))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (captainTeam is null)
+        {
+            return DraftPickResult.Invalid(new[] { "Captain's team not found." });
+        }
+
+        var maxTeamSize = snapshot.FixedTeamSize ?? snapshot.MaxTeamSize;
+        if (maxTeamSize.HasValue && captainTeam.Members.Count >= maxTeamSize.Value)
+        {
+            return DraftPickResult.Invalid(new[] { $"Team has reached maximum size ({maxTeamSize.Value})." });
+        }
+
+        captainTeam.Members.Add(new TeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = captainTeam.Id,
+            UserId = studentId,
+            IsCaptain = false,
+            Team = captainTeam
+        });
+
+        // Advance to next captain (round-robin)
+        await AdvanceDraftTurnAsync(draftState, subjectId, snapshot, cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return DraftPickResult.Success(await BuildDraftStateResponseAsync(subjectId, cancellationToken));
+    }
+
+    private async Task AdvanceDraftTurnAsync(DraftState draftState, Guid subjectId, SettingsSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        var captainOrder = JsonSerializer.Deserialize<List<Guid>>(draftState.CaptainOrder) ?? new List<Guid>();
+        var totalCaptains = captainOrder.Count;
+
+        var allStudentIds = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        var assignedIds = await _dbContext.TeamMembers
+            .Where(x => x.Team.SubjectId == subjectId)
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var availableStudents = allStudentIds.Except(assignedIds).ToList();
+
+        if (availableStudents.Count == 0)
+        {
+            draftState.IsActive = false;
+            draftState.IsCompleted = true;
+            draftState.CompletedAt = _timeProvider.GetUtcNow();
+            return;
+        }
+
+        var teams = await _dbContext.Teams
+            .Include(x => x.Members)
+            .Where(x => x.SubjectId == subjectId)
+            .ToListAsync(cancellationToken);
+
+        var maxTeamSize = snapshot.FixedTeamSize ?? snapshot.MaxTeamSize;
+
+        var nextIndex = (draftState.CurrentCaptainIndex + 1) % totalCaptains;
+        var newRound = nextIndex <= draftState.CurrentCaptainIndex ? draftState.CurrentRound + 1 : draftState.CurrentRound;
+        var checked1 = 0;
+
+        while (checked1 < totalCaptains)
+        {
+            var candidateCaptainId = captainOrder[nextIndex];
+            var candidateTeam = teams.FirstOrDefault(t => t.Members.Any(m => m.UserId == candidateCaptainId && m.IsCaptain));
+
+            if (candidateTeam is not null && (!maxTeamSize.HasValue || candidateTeam.Members.Count < maxTeamSize.Value))
+            {
+                draftState.CurrentCaptainIndex = nextIndex;
+                draftState.CurrentRound = newRound;
+                return;
+            }
+
+            nextIndex = (nextIndex + 1) % totalCaptains;
+            if (nextIndex == 0) newRound++;
+            checked1++;
+        }
+
+        draftState.IsActive = false;
+        draftState.IsCompleted = true;
+        draftState.CompletedAt = _timeProvider.GetUtcNow();
+    }
+
+    private async Task<DraftStateResponse> BuildDraftStateResponseAsync(Guid subjectId, CancellationToken cancellationToken)
+    {
+        var draftState = await _dbContext.DraftStates
+            .SingleAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        var captainOrder = JsonSerializer.Deserialize<List<Guid>>(draftState.CaptainOrder) ?? new List<Guid>();
+        Guid? currentCaptainId = draftState.IsActive && !draftState.IsCompleted && captainOrder.Count > 0
+            ? captainOrder[draftState.CurrentCaptainIndex]
+            : null;
+
+        var teams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var usernames = await LoadUsernamesAsync(
+            teams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        var allStudentIds = await _dbContext.SubjectParticipants
+            .Where(x => x.SubjectId == subjectId && x.Role == StudentRole)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        var assignedIds = teams.SelectMany(t => t.Members.Select(m => m.UserId)).ToHashSet();
+        var availableIds = allStudentIds.Except(assignedIds).ToList();
+
+        var availableUsernames = await LoadUsernamesAsync(availableIds, cancellationToken);
+
+        return new DraftStateResponse
+        {
+            SubjectId = subjectId,
+            IsActive = draftState.IsActive,
+            IsCompleted = draftState.IsCompleted,
+            CurrentCaptainId = currentCaptainId,
+            CurrentRound = draftState.CurrentRound,
+            Teams = teams.Select(t => MapTeam(t, usernames)).ToList(),
+            AvailableStudents = availableIds
+                .Select(id => new TeamMemberResponse
+                {
+                    UserId = id,
+                    Username = availableUsernames.TryGetValue(id, out var name) ? name : string.Empty,
+                    IsCaptain = false
+                })
+                .ToList()
+        };
+    }
+    public async Task<TeamMutationResult> StudentCreateTeamAsync(Guid currentUserId, Guid subjectId, StudentCreateTeamRequest request, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return TeamMutationResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return TeamMutationResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return TeamMutationResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        var alreadyInTeam = await _dbContext.TeamMembers
+            .AnyAsync(x => x.Team.SubjectId == subjectId && x.UserId == currentUserId, cancellationToken);
+
+        if (alreadyInTeam)
+        {
+            return TeamMutationResult.Invalid(new[] { "You are already a member of a team." });
+        }
+
+        var snapshot = SettingsSnapshot.From(settings);
+        if (snapshot.FixedTeamsCount.HasValue)
+        {
+            var currentTeamsCount = await _dbContext.Teams
+                .CountAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+            if (currentTeamsCount >= snapshot.FixedTeamsCount.Value)
+            {
+                return TeamMutationResult.Invalid(new[] { $"Maximum number of teams ({snapshot.FixedTeamsCount.Value}) has been reached." });
+            }
+        }
+
+        var subject = await _dbContext.Subjects.SingleAsync(x => x.Id == subjectId, cancellationToken);
+
+        var team = new Team
+        {
+            Id = Guid.NewGuid(),
+            SubjectId = subjectId,
+            Name = request.Name,
+            CreatedAt = _timeProvider.GetUtcNow(),
+            Subject = subject
+        };
+
+        team.Members = new List<TeamMember>
+        {
+            new TeamMember
+            {
+                Id = Guid.NewGuid(),
+                TeamId = team.Id,
+                UserId = currentUserId,
+                IsCaptain = true,
+                Team = team
+            }
+        };
+
+        _dbContext.Teams.Add(team);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return TeamMutationResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    public async Task<StudentJoinTeamResult> StudentJoinTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return StudentJoinTeamResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        // Check if student is already in a team
+        var alreadyInTeam = await _dbContext.TeamMembers
+            .AnyAsync(x => x.Team.SubjectId == subjectId && x.UserId == currentUserId, cancellationToken);
+
+        if (alreadyInTeam)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "You are already a member of a team." });
+        }
+
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .SingleOrDefaultAsync(x => x.Id == teamId && x.SubjectId == subjectId, cancellationToken);
+
+        if (team is null)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { "Team not found." });
+        }
+
+        var snapshot = SettingsSnapshot.From(settings);
+        var maxSize = snapshot.FixedTeamSize ?? snapshot.MaxTeamSize;
+
+        if (maxSize.HasValue && team.Members.Count >= maxSize.Value)
+        {
+            return StudentJoinTeamResult.Invalid(new[] { $"Team has reached maximum size ({maxSize.Value})." });
+        }
+
+        team.Members.Add(new TeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team.Id,
+            UserId = currentUserId,
+            IsCaptain = false,
+            Team = team
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return StudentJoinTeamResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    public async Task<StudentLeaveTeamResult> StudentLeaveTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken)
+    {
+        if (!await IsStudentAsync(currentUserId, subjectId, cancellationToken))
+        {
+            return StudentLeaveTeamResult.Forbidden();
+        }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        if (settings is null || settings.DistributionMode != TeamDistributionMode.Students)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Distribution mode must be Students." });
+        }
+
+        if (settings.IsFinalized)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Teams are already finalized." });
+        }
+
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .SingleOrDefaultAsync(x => x.Id == teamId && x.SubjectId == subjectId, cancellationToken);
+
+        if (team is null)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "Team not found." });
+        }
+
+        var member = team.Members.SingleOrDefault(m => m.UserId == currentUserId);
+        if (member is null)
+        {
+            return StudentLeaveTeamResult.Invalid(new[] { "You are not a member of this team." });
+        }
+
+        if (member.IsCaptain)
+        {
+            // Captain can only leave if they are the only member
+            if (team.Members.Count > 1)
+            {
+                return StudentLeaveTeamResult.Invalid(new[] { "Captain cannot leave the team while other members are present." });
+            }
+
+            // Captain is alone — delete the whole team
+            _dbContext.Teams.Remove(team);
+        }
+        else
+        {
+            _dbContext.TeamMembers.Remove(member);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(subjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return StudentLeaveTeamResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
+    private async Task<bool> IsStudentAsync(Guid userId, Guid subjectId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.SubjectParticipants
+            .AnyAsync(
+                x => x.SubjectId == subjectId
+                     && x.UserId == userId
+                     && x.Role == StudentRole,
+                cancellationToken);
     }
 
     private sealed class ValidationOutcome
