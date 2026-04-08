@@ -4,6 +4,7 @@ namespace Application.Grades.Models
     {
         public Guid id { get; set; }
         public Guid teamId { get; set; }
+        public Guid assignmentId { get; set; }
         public Guid submissionId { get; set; }
         public int score { get; set; }
         public string verdictText { get; set; } = string.Empty;

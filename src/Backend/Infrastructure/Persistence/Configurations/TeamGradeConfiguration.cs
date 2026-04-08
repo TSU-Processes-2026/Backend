@@ -18,18 +18,21 @@ public sealed class TeamGradeConfiguration : IEntityTypeConfiguration<TeamGrade>
         builder.Property(x => x.TeamId)
             .IsRequired();
 
+        builder.Property(x => x.AssignmentId)
+            .IsRequired();
+
         builder.Property(x => x.SubmissionId)
             .IsRequired();
 
-        builder.HasIndex(x => x.TeamId)
+        builder.HasIndex(x => new { x.TeamId, x.AssignmentId })
             .IsUnique();
 
         builder.HasIndex(x => x.SubmissionId)
             .IsUnique();
 
         builder.HasOne(x => x.Team)
-            .WithOne(x => x.TeamGrade)
-            .HasForeignKey<TeamGrade>(x => x.TeamId)
+            .WithMany(x => x.TeamGrades)
+            .HasForeignKey(x => x.TeamId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(x => x.Submission)

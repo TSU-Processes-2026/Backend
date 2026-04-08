@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -17,6 +17,7 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TeamId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
                     SubmissionId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
@@ -43,9 +44,9 @@ namespace Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_team_grades_TeamId",
+                name: "IX_team_grades_TeamId_AssignmentId",
                 table: "team_grades",
-                column: "TeamId",
+                columns: new[] { "TeamId", "AssignmentId" },
                 unique: true);
         }
 
