@@ -1,4 +1,4 @@
-﻿using Application.Submissions.Models;
+using Application.Submissions.Models;
 using System.Text.Json.Serialization;
 
 namespace Infrastructure.Persistence.Entities
@@ -23,5 +23,7 @@ namespace Infrastructure.Persistence.Entities
         public Grade grade { get; set; }
         [JsonIgnore]
         public SubmissionDecisionSession? DecisionSession { get; set; }
+        [JsonIgnore]
+        public TeamGrade? TeamGrade { get; set; }
     }
 }
