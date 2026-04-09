@@ -1,5 +1,6 @@
 using Application.Assignments.Contracts;
 using Application.Auth.Contracts;
+using Application.Grades.Contract;
 using Application.Comments.Contracts;
 using Application.Auth.Options;
 using Application.Posts.Contracts;
@@ -11,6 +12,7 @@ using Infrastructure.Assignments.Services;
 using Infrastructure.Auth.Services;
 using Infrastructure.BackgroundJobs;
 using Infrastructure.Comments.Services;
+using Infrastructure.Grades;
 using Infrastructure.Files.Contracts;
 using Infrastructure.Files.Options;
 using Infrastructure.Files.Services;
@@ -75,6 +77,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISubjectsService, SubjectsService>();
         services.AddScoped<IPostsService, PostsService>();
         services.AddScoped<IAssignmentsService, AssignmentsService>();
+        services.AddScoped<IGradesService, GradesService>();
+        services.AddScoped<ITeamGradesService, TeamGradesService>();
         services.AddScoped<ITeamsService, TeamsService>();
         services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
         services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
