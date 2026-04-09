@@ -135,13 +135,14 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         };
 
         _dbContext.CaptainVotes.Add(vote);
+        session.Votes.Add(vote);
 
         var totalMembers = team.Members.Count;
-        var votesAfterThis = session.Votes.Count + 1;
+        var votesAfterThis = session.Votes.Count;
 
         if (votesAfterThis >= totalMembers)
         {
-            var winner = await CalculateWinnerAsync(session, cancellationToken);
+            var winner = CalculateWinner(session);
             await CloseSessionAndAssignCaptainAsync(team, session, winner, now, cancellationToken);
 
             _logger.LogInformation(
@@ -339,7 +340,7 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
 
         foreach (var session in expiredSessions)
         {
-            var winner = await CalculateWinnerAsync(session, cancellationToken);
+            var winner = CalculateWinner(session);
             await CloseSessionAndAssignCaptainAsync(session.Team, session, winner, now, cancellationToken);
 
             _logger.LogInformation(
@@ -358,9 +359,7 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
                 cancellationToken);
     }
 
-    private async Task<Guid?> CalculateWinnerAsync(
-        CaptainVotingSession session,
-        CancellationToken cancellationToken)
+    private static Guid? CalculateWinner(CaptainVotingSession session)
     {
         var votes = session.Votes;
         if (votes.Count == 0)
