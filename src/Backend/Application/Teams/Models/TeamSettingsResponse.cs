@@ -1,3 +1,5 @@
+using Application.Submissions.Models;
+
 namespace Application.Teams.Models;
 
 public sealed class TeamSettingsResponse
@@ -13,5 +15,8 @@ public sealed class TeamSettingsResponse
     public CaptainSelectionMethod? CaptainSelectionMode { get; init; }
     public int? CaptainVotingDeadlineDays { get; init; }
     public bool RequiresCaptain { get; init; }
+    public SubmissionDecisionMode? DecisionMode { get; init; }
+    public int? DecisionDeadlineDays { get; init; }
+    public bool RequiresDecision { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
