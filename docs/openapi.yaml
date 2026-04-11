@@ -50,6 +50,14 @@ components:
       type: string
       enum: [Manual, Random, Students, Draft]
 
+    CaptainSelectionMethod:
+      type: string
+      enum: [Manual, Voting, Random]
+
+    SubmissionDecisionMode:
+      type: string
+      enum: [Voting, CaptainDecides]
+
     TeamSettingsRequest:
       type: object
       properties:
@@ -58,6 +66,12 @@ components:
         fixedTeamSize: { type: integer, nullable: true }
         minTeamSize: { type: integer, nullable: true }
         maxTeamSize: { type: integer, nullable: true }
+        captainSelectionMode: { $ref: '#/components/schemas/CaptainSelectionMethod', nullable: true }
+        captainVotingDeadlineDays: { type: integer, nullable: true }
+        requiresCaptain: { type: boolean, nullable: true }
+        decisionMode: { $ref: '#/components/schemas/SubmissionDecisionMode', nullable: true }
+        decisionDeadlineDays: { type: integer, nullable: true }
+        requiresDecision: { type: boolean, nullable: true }
 
     TeamSettingsResponse:
       type: object
@@ -70,6 +84,12 @@ components:
         maxTeamSize: { type: integer, nullable: true }
         isFinalized: { type: boolean }
         finalizedAt: { type: string, format: date-time, nullable: true }
+        captainSelectionMode: { $ref: '#/components/schemas/CaptainSelectionMethod', nullable: true }
+        captainVotingDeadlineDays: { type: integer, nullable: true }
+        requiresCaptain: { type: boolean }
+        decisionMode: { $ref: '#/components/schemas/SubmissionDecisionMode', nullable: true }
+        decisionDeadlineDays: { type: integer, nullable: true }
+        requiresDecision: { type: boolean }
         warnings:
           type: array
           items: { type: string }
