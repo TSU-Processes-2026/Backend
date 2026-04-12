@@ -47,14 +47,6 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
             return CaptainVotingInitiateResult.NotFound("Team not found.");
         }
 
-        var settings = await _dbContext.SubjectTeamSettings
-            .FirstOrDefaultAsync(s => s.SubjectId == subjectId, cancellationToken);
-
-        if (!IsTeamInDraftMode(settings))
-        {
-            return CaptainVotingInitiateResult.InvalidOperation("Captain selection is only allowed in Draft mode.");
-        }
-
         var existingSession = await _dbContext.CaptainVotingSessions
             .FirstOrDefaultAsync(s => s.TeamId == teamId && !s.IsClosed, cancellationToken);
 
@@ -62,6 +54,9 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         {
             return CaptainVotingInitiateResult.AlreadyActive(MapSession(existingSession));
         }
+
+        var settings = await _dbContext.SubjectTeamSettings
+            .FirstOrDefaultAsync(s => s.SubjectId == subjectId, cancellationToken);
 
         var deadlineDays = settings?.CaptainVotingDeadlineDays ?? DefaultVotingDeadlineDays;
         var now = _timeProvider.GetUtcNow();
@@ -140,13 +135,14 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         };
 
         _dbContext.CaptainVotes.Add(vote);
+        session.Votes.Add(vote);
 
         var totalMembers = team.Members.Count;
-        var votesAfterThis = session.Votes.Count + 1;
+        var votesAfterThis = session.Votes.Count;
 
         if (votesAfterThis >= totalMembers)
         {
-            var winner = await CalculateWinnerAsync(session, cancellationToken);
+            var winner = CalculateWinner(session);
             await CloseSessionAndAssignCaptainAsync(team, session, winner, now, cancellationToken);
 
             _logger.LogInformation(
@@ -235,14 +231,6 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
             return CaptainSelectionResult.NotFound("Team not found.");
         }
 
-        var settings = await _dbContext.SubjectTeamSettings
-            .FirstOrDefaultAsync(s => s.SubjectId == subjectId, cancellationToken);
-
-        if (!IsTeamInDraftMode(settings))
-        {
-            return CaptainSelectionResult.InvalidOperation("Captain selection is only allowed in Draft mode.");
-        }
-
         if (team.Members.Count == 0)
         {
             return CaptainSelectionResult.InvalidOperation("Cannot select captain for a team with no members.");
@@ -289,14 +277,6 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         if (team is null)
         {
             return CaptainSelectionResult.NotFound("Team not found.");
-        }
-
-        var settings = await _dbContext.SubjectTeamSettings
-            .FirstOrDefaultAsync(s => s.SubjectId == subjectId, cancellationToken);
-
-        if (!IsTeamInDraftMode(settings))
-        {
-            return CaptainSelectionResult.InvalidOperation("Captain selection is only allowed in Draft mode.");
         }
 
         if (!IsUserTeamMember(team, captainUserId))
@@ -360,7 +340,7 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
 
         foreach (var session in expiredSessions)
         {
-            var winner = await CalculateWinnerAsync(session, cancellationToken);
+            var winner = CalculateWinner(session);
             await CloseSessionAndAssignCaptainAsync(session.Team, session, winner, now, cancellationToken);
 
             _logger.LogInformation(
@@ -379,9 +359,7 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
                 cancellationToken);
     }
 
-    private async Task<Guid?> CalculateWinnerAsync(
-        CaptainVotingSession session,
-        CancellationToken cancellationToken)
+    private static Guid? CalculateWinner(CaptainVotingSession session)
     {
         var votes = session.Votes;
         if (votes.Count == 0)
@@ -429,11 +407,6 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    private static bool IsTeamInDraftMode(SubjectTeamSettings? settings)
-    {
-        return settings is null || settings.DistributionMode == TeamDistributionMode.Draft;
     }
 
     private static bool IsUserTeamMember(Team team, Guid userId)
