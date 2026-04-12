@@ -682,6 +682,32 @@ namespace Infrastructure.Migrations
 
                     b.ToTable("team_members", (string)null);
                 });
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.TeamMemberGradeAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TeamGradeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("TeamGradeId", "StudentId")
+                        .IsUnique();
+
+                    b.ToTable("team_member_grade_adjustments", (string)null);
+                });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
@@ -709,6 +735,7 @@ namespace Infrastructure.Migrations
 
                     b.ToTable("AspNetRoles", (string)null);
                 });
+
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
@@ -1092,6 +1119,22 @@ namespace Infrastructure.Migrations
 
                     b.Navigation("Team");
                 });
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.TeamMemberGradeAdjustment", b =>
+                {
+                    b.HasOne("Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Persistence.Entities.TeamGrade", "TeamGrade")
+                        .WithMany("MemberGradeAdjustments")
+                        .HasForeignKey("TeamGradeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TeamGrade");
+                });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
@@ -1202,6 +1245,10 @@ namespace Infrastructure.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("TeamGrades");
+                });
+            modelBuilder.Entity("Infrastructure.Persistence.Entities.TeamGrade", b =>
+                {
+                    b.Navigation("MemberGradeAdjustments");
                 });
 #pragma warning restore 612, 618
         }

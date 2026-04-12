@@ -79,6 +79,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IAssignmentsService, AssignmentsService>();
         services.AddScoped<IGradesService, GradesService>();
         services.AddScoped<ITeamGradesService, TeamGradesService>();
+        services.AddScoped<ITeamMemberGradesService, TeamMemberGradesService>();
         services.AddScoped<ITeamsService, TeamsService>();
         services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
         services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
