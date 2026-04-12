@@ -9,5 +9,6 @@ namespace Infrastructure.Persistence.Entities
 
         public Team Team { get; set; } = null!;
         public Submission Submission { get; set; } = null!;
+        public ICollection<TeamMemberGradeAdjustment> MemberGradeAdjustments { get; set; } = new List<TeamMemberGradeAdjustment>();
     }
 }
