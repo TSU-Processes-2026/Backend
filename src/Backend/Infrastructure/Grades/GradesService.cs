@@ -1,4 +1,4 @@
-﻿using Application.Grades.Contract;
+using Application.Grades.Contract;
 using Application.Grades.Models;
 using Application.Submissions.Models;
 using Infrastructure.Persistence;
@@ -40,10 +40,14 @@ namespace Infrastructure.Grades
         public async Task<GradesAccessResult> CreateGradeAsync(Guid submissionId, int score, string verdictText, string teacherId)
         {
             var submission = await _dbContext.Submissions
+                .Include(s => s.post)
                 .FirstOrDefaultAsync(s => s.id == submissionId);
 
             if (submission == null)
                 return GradesAccessResult.NotFound();
+
+            if (await SubmissionBelongsToTeamAsync(submission))
+                return GradesAccessResult.Forbidden();
 
             if (submission.status != SubmissionStatusEnum.RequiresReview)
                 return GradesAccessResult.Forbidden();
@@ -80,6 +84,16 @@ namespace Infrastructure.Grades
             if (grade == null)
                 return GradesAccessResult.NotFound();
 
+            var submission = await _dbContext.Submissions
+                .Include(s => s.post)
+                .FirstOrDefaultAsync(s => s.id == submissionId);
+
+            if (submission == null)
+                return GradesAccessResult.NotFound();
+
+            if (await SubmissionBelongsToTeamAsync(submission))
+                return GradesAccessResult.Forbidden();
+
             grade.score = score;
             grade.verdictText = verdictText;
             grade.verdictedAt = DateTime.UtcNow;
@@ -105,10 +119,14 @@ namespace Infrastructure.Grades
                 return GradesAccessResult.NotFound();
 
             var submission = await _dbContext.Submissions
+                .Include(s => s.post)
                 .FirstOrDefaultAsync(s => s.id == submissionId);
 
             if (submission == null)
                 return GradesAccessResult.NotFound();
+
+            if (await SubmissionBelongsToTeamAsync(submission))
+                return GradesAccessResult.Forbidden();
 
             submission.status = SubmissionStatusEnum.RequiresReview;
 
@@ -116,6 +134,12 @@ namespace Infrastructure.Grades
             await _dbContext.SaveChangesAsync();
 
             return GradesAccessResult.Success(null);
+        }
+
+        private async Task<bool> SubmissionBelongsToTeamAsync(Submission submission)
+        {
+            return await _dbContext.TeamGrades
+                .AnyAsync(x => x.SubmissionId == submission.id);
         }
     }
 }

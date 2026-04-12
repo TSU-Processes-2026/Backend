@@ -24,6 +24,8 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<AnswerItem> AnswerItems => Set<AnswerItem>();
     public DbSet<Grade> Grades => Set<Grade>();
+    public DbSet<TeamGrade> TeamGrades => Set<TeamGrade>();
+    public DbSet<TeamMemberGradeAdjustment> TeamMemberGradeAdjustments => Set<TeamMemberGradeAdjustment>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<SubjectTeamSettings> SubjectTeamSettings => Set<SubjectTeamSettings>();
