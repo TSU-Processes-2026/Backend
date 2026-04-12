@@ -17,4 +17,5 @@ public sealed class Team
     public ApplicationUser? Captain { get; set; }
     public ICollection<TeamMember> Members { get; set; } = new List<TeamMember>();
     public ICollection<CaptainVotingSession> CaptainVotingSessions { get; set; } = new List<CaptainVotingSession>();
+    public ICollection<TeamGrade> TeamGrades { get; set; } = new List<TeamGrade>();
 }

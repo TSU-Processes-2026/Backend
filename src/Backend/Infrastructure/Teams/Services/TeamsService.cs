@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Application.Submissions.Models;
 using Application.Teams.Contracts;
 using Application.Teams.Models;
 using Infrastructure.Persistence;
@@ -61,6 +62,12 @@ public sealed class TeamsService : ITeamsService
                 RequiresDecision = false,
                 IsFinalized = false,
                 FinalizedAt = null,
+                CaptainSelectionMode = snapshot.CaptainSelectionMode,
+                CaptainVotingDeadlineDays = snapshot.CaptainVotingDeadlineDays,
+                RequiresCaptain = snapshot.RequiresCaptain,
+                DecisionMode = snapshot.DecisionMode,
+                DecisionDeadlineDays = snapshot.DecisionDeadlineDays,
+                RequiresDecision = snapshot.RequiresDecision,
                 Warnings = warnings
             });
         }
@@ -79,13 +86,38 @@ public sealed class TeamsService : ITeamsService
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
         var distributionMode = request.DistributionMode ?? existing?.DistributionMode ?? TeamDistributionMode.Manual;
+        var oldMode = existing?.DistributionMode;
+
+        var requiresCaptain = request.RequiresCaptain ?? existing?.RequiresCaptain ?? false;
+        var captainSelectionMode = request.CaptainSelectionMode ?? existing?.CaptainSelectionMode;
+        var captainVotingDeadlineDays = request.CaptainVotingDeadlineDays ?? existing?.CaptainVotingDeadlineDays;
+        if (!requiresCaptain)
+        {
+            captainSelectionMode = null;
+            captainVotingDeadlineDays = null;
+        }
+
+        var requiresDecision = request.RequiresDecision ?? existing?.RequiresDecision ?? false;
+        var decisionMode = request.DecisionMode ?? existing?.DecisionMode;
+        var decisionDeadlineDays = request.DecisionDeadlineDays ?? existing?.DecisionDeadlineDays;
+        if (!requiresDecision)
+        {
+            decisionMode = null;
+            decisionDeadlineDays = null;
+        }
 
         var snapshot = new SettingsSnapshot(
             distributionMode,
             request.FixedTeamsCount,
             request.FixedTeamSize,
             request.MinTeamSize,
-            request.MaxTeamSize);
+            request.MaxTeamSize,
+            captainSelectionMode,
+            captainVotingDeadlineDays,
+            requiresCaptain,
+            decisionMode,
+            decisionDeadlineDays,
+            requiresDecision);
 
         var errors = ValidateSettings(snapshot);
         if (errors.Count > 0)
@@ -119,6 +151,21 @@ public sealed class TeamsService : ITeamsService
             _dbContext.SubjectTeamSettings.Add(settings);
         }
 
+        // When mode changes away from Draft, deactivate any existing draft state
+        // so a new draft can be started later if mode switches back to Draft
+        if (oldMode == TeamDistributionMode.Draft && distributionMode != TeamDistributionMode.Draft)
+        {
+            var existingDraft = await _dbContext.DraftStates
+                .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+            if (existingDraft is not null)
+            {
+                existingDraft.IsActive = false;
+                existingDraft.IsCompleted = true;
+                existingDraft.CompletedAt = _timeProvider.GetUtcNow();
+            }
+        }
+
         var studentCount = await GetStudentCountAsync(subjectId, cancellationToken);
         var warnings = GetFeasibilityWarnings(studentCount, snapshot);
 
@@ -140,7 +187,16 @@ public sealed class TeamsService : ITeamsService
             teams.SelectMany(team => team.Members.Select(member => member.UserId)),
             cancellationToken);
 
-        return TeamListResult.Success(teams.Select(team => MapTeam(team, usernames)).ToList());
+        var settings = await _dbContext.SubjectTeamSettings
+            .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
+
+        var distributionMode = settings?.DistributionMode ?? TeamDistributionMode.Manual;
+        var isFinalized = settings?.IsFinalized ?? false;
+
+        return TeamListResult.Success(
+            teams.Select(team => MapTeam(team, usernames)).ToList(),
+            distributionMode,
+            isFinalized);
     }
 
     public async Task<UnassignedStudentsResult> GetUnassignedStudentsAsync(Guid currentUserId, Guid subjectId, CancellationToken cancellationToken)
@@ -213,7 +269,7 @@ public sealed class TeamsService : ITeamsService
         }
 
         var snapshot = settings is null
-            ? new SettingsSnapshot(TeamDistributionMode.Random, null, null, null, null)
+            ? new SettingsSnapshot(TeamDistributionMode.Random, null, null, null, null, null, null, false, null, null, false)
             : SettingsSnapshot.From(settings);
 
         var students = await _dbContext.SubjectParticipants
@@ -263,7 +319,6 @@ public sealed class TeamsService : ITeamsService
         {
             return TeamValidationResult.Forbidden();
         }
-
         var snapshot = SettingsSnapshot.From(settings);
         var outcome = await ValidateManualTeamsAsync(subjectId, request.Teams, snapshot, cancellationToken);
 
@@ -692,6 +747,40 @@ public sealed class TeamsService : ITeamsService
             errors.Add("MinTeamSize must be less than or equal to MaxTeamSize.");
         }
 
+        if (settings.RequiresCaptain)
+        {
+            if (settings.CaptainSelectionMode is null)
+            {
+                errors.Add("CaptainSelectionMode must be set when RequiresCaptain is true.");
+            }
+
+            if (settings.CaptainVotingDeadlineDays.HasValue && settings.CaptainVotingDeadlineDays.Value <= 0)
+            {
+                errors.Add("CaptainVotingDeadlineDays must be greater than zero.");
+            }
+        }
+
+        if (settings.RequiresDecision)
+        {
+            if (settings.DecisionMode is null)
+            {
+                errors.Add("DecisionMode must be set when RequiresDecision is true.");
+            }
+            else if (settings.DecisionMode == SubmissionDecisionMode.Voting && settings.RequiresCaptain)
+            {
+                errors.Add("DecisionMode Voting cannot be used when RequiresCaptain is true.");
+            }
+            else if (settings.DecisionMode == SubmissionDecisionMode.CaptainDecides && !settings.RequiresCaptain)
+            {
+                errors.Add("DecisionMode CaptainDecides requires RequiresCaptain to be true.");
+            }
+
+            if (settings.DecisionDeadlineDays.HasValue && settings.DecisionDeadlineDays.Value <= 0)
+            {
+                errors.Add("DecisionDeadlineDays must be greater than zero.");
+            }
+        }
+
         return errors;
     }
 
@@ -938,7 +1027,13 @@ public sealed class TeamsService : ITeamsService
             null,
             null,
             settings.MinTeamSize,
-            settings.MaxTeamSize);
+            settings.MaxTeamSize,
+            null,
+            null,
+            false,
+            null,
+            null,
+            false);
 
         var candidateCounts = GetBalancedTeamCounts(totalStudents, boundsOnlySettings);
 
@@ -1082,6 +1177,12 @@ public sealed class TeamsService : ITeamsService
             RequiresDecision = settings.RequiresDecision,
             IsFinalized = settings.IsFinalized,
             FinalizedAt = settings.FinalizedAt,
+            CaptainSelectionMode = settings.CaptainSelectionMode,
+            CaptainVotingDeadlineDays = settings.CaptainVotingDeadlineDays,
+            RequiresCaptain = settings.RequiresCaptain,
+            DecisionMode = settings.DecisionMode,
+            DecisionDeadlineDays = settings.DecisionDeadlineDays,
+            RequiresDecision = settings.RequiresDecision,
             Warnings = warnings
         };
     }
@@ -1132,25 +1233,32 @@ public sealed class TeamsService : ITeamsService
 
     private static TeamResponse MapTeam(Team team, IReadOnlyDictionary<Guid, string> usernames)
     {
-        var captain = team.Members.FirstOrDefault(m => m.IsCaptain);
+        // Captain can be identified either by TeamMember.IsCaptain (Draft mode)
+        // or by Team.CaptainUserId (Voting/Random/Manual selection)
+        var captainFromMember = team.Members.FirstOrDefault(m => m.IsCaptain);
+        var captainId = captainFromMember?.UserId ?? team.CaptainUserId;
+
         return new TeamResponse
         {
             Id = team.Id,
             SubjectId = team.SubjectId,
             Name = team.Name,
-            CaptainId = captain?.UserId,
+            CaptainId = captainId,
             MemberIds = team.Members.Select(member => member.UserId).ToList(),
-            Members = team.Members.Select(member => MapMember(member, usernames)).ToList()
+            Members = team.Members.Select(member => MapMember(member, usernames, team.CaptainUserId)).ToList()
         };
     }
 
-    private static TeamMemberResponse MapMember(TeamMember member, IReadOnlyDictionary<Guid, string> usernames)
+    private static TeamMemberResponse MapMember(TeamMember member, IReadOnlyDictionary<Guid, string> usernames, Guid? teamCaptainUserId = null)
     {
+        // A member is captain if either IsCaptain flag is set (Draft mode)
+        // or if they match the Team.CaptainUserId (Voting/Random/Manual selection)
+        var isCaptain = member.IsCaptain || member.UserId == teamCaptainUserId;
         return new TeamMemberResponse
         {
             UserId = member.UserId,
             Username = usernames.TryGetValue(member.UserId, out var username) ? username : string.Empty,
-            IsCaptain = member.IsCaptain
+            IsCaptain = isCaptain
         };
     }
 
@@ -1769,13 +1877,19 @@ public sealed class TeamsService : ITeamsService
         int? FixedTeamsCount,
         int? FixedTeamSize,
         int? MinTeamSize,
-        int? MaxTeamSize)
+        int? MaxTeamSize,
+        CaptainSelectionMethod? CaptainSelectionMode,
+        int? CaptainVotingDeadlineDays,
+        bool RequiresCaptain,
+        SubmissionDecisionMode? DecisionMode,
+        int? DecisionDeadlineDays,
+        bool RequiresDecision)
     {
         public static SettingsSnapshot From(SubjectTeamSettings? settings)
         {
             if (settings is null)
             {
-                return new SettingsSnapshot(TeamDistributionMode.Manual, null, null, null, null);
+                return new SettingsSnapshot(TeamDistributionMode.Manual, null, null, null, null, null, null, false, null, null, false);
             }
 
             return new SettingsSnapshot(
@@ -1783,7 +1897,13 @@ public sealed class TeamsService : ITeamsService
                 settings.FixedTeamsCount,
                 settings.FixedTeamSize,
                 settings.MinTeamSize,
-                settings.MaxTeamSize);
+                settings.MaxTeamSize,
+                settings.CaptainSelectionMode,
+                settings.CaptainVotingDeadlineDays,
+                settings.RequiresCaptain,
+                settings.DecisionMode,
+                settings.DecisionDeadlineDays,
+                settings.RequiresDecision);
         }
     }
 }
