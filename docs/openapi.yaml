@@ -432,6 +432,25 @@ components:
         score: { type: integer }
         verdictText: { type: string }
 
+    TeamMemberGrade:
+      type: object
+      properties:
+        id: { type: string, format: uuid, nullable: true }
+        teamGradeId: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        assignmentId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        username: { type: string }
+        baseScore: { type: integer }
+        score: { type: integer }
+        isAdjusted: { type: boolean }
+        adjustedAt: { type: string, format: date-time, nullable: true }
+
+    TeamMemberGradeAdjustmentRequest:
+      type: object
+      required: [score]
+      properties:
+        score: { type: integer }
     Comment:
       type: object
       properties:
@@ -1913,4 +1932,95 @@ paths:
           description: Not Found. Оценка еще не выставлена.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
-
+  /teams/{teamId}/assignments/{assignmentId}/students/{studentId}/grade:
+    get:
+      tags: [Grades]
+      summary: Получить итоговую оценку студента по командному заданию
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Доступно преподавателю, администратору или самому студенту.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Командная оценка или участник команды не найдены.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Grades]
+      summary: Установить индивидуальную итоговую оценку студенту
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamMemberGradeAdjustmentRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ или ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Командная оценка или участник команды не найдены.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Grades]
+      summary: Удалить индивидуальную итоговую оценку студента
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ или ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Индивидуальная корректировка не найдена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
