@@ -1,5 +1,11 @@
 ### VisualStudio ###
 
+# Repository and docs not needed for API image build
+.git
+.github
+docs
+src/Tests
+
 # Tool Runtime Dir
 **/.dotnet/
 **/.packages/
@@ -332,3 +338,14 @@
 
 # performance testing sandbox
 **/sandbox
+
+*
+!src/
+!src/Backend/
+!src/Backend/**
+!.dockerignore
+
+src/Backend/**/bin/
+src/Backend/**/obj/
+src/Backend/**/.vs/
+src/Backend/**/.idea/
