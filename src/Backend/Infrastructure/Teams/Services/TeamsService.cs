@@ -53,6 +53,12 @@ public sealed class TeamsService : ITeamsService
                 FixedTeamSize = snapshot.FixedTeamSize,
                 MinTeamSize = snapshot.MinTeamSize,
                 MaxTeamSize = snapshot.MaxTeamSize,
+                CaptainSelectionMode = null,
+                CaptainVotingDeadlineDays = null,
+                RequiresCaptain = false,
+                DecisionMode = null,
+                DecisionDeadlineDays = null,
+                RequiresDecision = false,
                 IsFinalized = false,
                 FinalizedAt = null,
                 Warnings = warnings
@@ -99,6 +105,12 @@ public sealed class TeamsService : ITeamsService
         settings.FixedTeamSize = request.FixedTeamSize;
         settings.MinTeamSize = request.MinTeamSize;
         settings.MaxTeamSize = request.MaxTeamSize;
+        settings.CaptainSelectionMode = request.CaptainSelectionMode ?? existing?.CaptainSelectionMode;
+        settings.CaptainVotingDeadlineDays = request.CaptainVotingDeadlineDays ?? existing?.CaptainVotingDeadlineDays;
+        settings.RequiresCaptain = request.RequiresCaptain ?? existing?.RequiresCaptain ?? false;
+        settings.DecisionMode = request.DecisionMode ?? existing?.DecisionMode;
+        settings.DecisionDeadlineDays = request.DecisionDeadlineDays ?? existing?.DecisionDeadlineDays;
+        settings.RequiresDecision = request.RequiresDecision ?? existing?.RequiresDecision ?? false;
         settings.IsFinalized = false;
         settings.FinalizedAt = null;
 
@@ -247,7 +259,7 @@ public sealed class TeamsService : ITeamsService
         var settings = await _dbContext.SubjectTeamSettings
             .SingleOrDefaultAsync(x => x.SubjectId == subjectId, cancellationToken);
 
-        if (settings is not null && !CanManageManualDistributionInMode(settings.DistributionMode))
+        if (settings is not null && !CanValidateDistributionInMode(settings.DistributionMode))
         {
             return TeamValidationResult.Forbidden();
         }
@@ -1040,6 +1052,11 @@ public sealed class TeamsService : ITeamsService
         return mode is TeamDistributionMode.Manual or TeamDistributionMode.Random;
     }
 
+    private static bool CanValidateDistributionInMode(TeamDistributionMode mode)
+    {
+        return mode is TeamDistributionMode.Manual or TeamDistributionMode.Random or TeamDistributionMode.Students;
+    }
+
     private async Task<int> GetStudentCountAsync(Guid subjectId, CancellationToken cancellationToken)
     {
         return await _dbContext.SubjectParticipants
@@ -1057,6 +1074,12 @@ public sealed class TeamsService : ITeamsService
             FixedTeamSize = settings.FixedTeamSize,
             MinTeamSize = settings.MinTeamSize,
             MaxTeamSize = settings.MaxTeamSize,
+            CaptainSelectionMode = settings.CaptainSelectionMode,
+            CaptainVotingDeadlineDays = settings.CaptainVotingDeadlineDays,
+            RequiresCaptain = settings.RequiresCaptain,
+            DecisionMode = settings.DecisionMode,
+            DecisionDeadlineDays = settings.DecisionDeadlineDays,
+            RequiresDecision = settings.RequiresDecision,
             IsFinalized = settings.IsFinalized,
             FinalizedAt = settings.FinalizedAt,
             Warnings = warnings
@@ -1565,7 +1588,7 @@ public sealed class TeamsService : ITeamsService
                 Id = Guid.NewGuid(),
                 TeamId = team.Id,
                 UserId = currentUserId,
-                IsCaptain = true,
+                IsCaptain = settings.RequiresCaptain,
                 Team = team
             }
         };
