@@ -54,6 +54,9 @@ public sealed class SubjectTeamSettingsConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.DecisionDeadlineDays)
             .IsRequired(false);
 
+        builder.Property(x => x.RequiredDecisionVotes)
+            .IsRequired(false);
+
         builder.Property(x => x.RequiresDecision)
             .IsRequired();
 

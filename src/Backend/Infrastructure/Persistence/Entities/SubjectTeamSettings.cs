@@ -18,6 +18,7 @@ public sealed class SubjectTeamSettings
     public bool RequiresCaptain { get; set; }
     public SubmissionDecisionMode? DecisionMode { get; set; }
     public int? DecisionDeadlineDays { get; set; }
+    public int? RequiredDecisionVotes { get; set; }
     public bool RequiresDecision { get; set; }
     public Subject Subject { get; set; } = null!;
 }

@@ -17,6 +17,7 @@ public sealed class TeamSettingsResponse
     public bool RequiresCaptain { get; init; }
     public SubmissionDecisionMode? DecisionMode { get; init; }
     public int? DecisionDeadlineDays { get; init; }
+    public int? RequiredDecisionVotes { get; init; }
     public bool RequiresDecision { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
