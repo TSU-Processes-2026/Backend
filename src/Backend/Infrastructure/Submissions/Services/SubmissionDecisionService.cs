@@ -229,9 +229,12 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
         var totalMembers = team.Members.Count;
         var approvalsAfterThis = session.Decisions.Count(d => d.Decision == DecisionType.Approve)
                                  + (decision == DecisionType.Approve ? 1 : 0);
+        var rejectionsAfterThis = session.Decisions.Count(d => d.Decision == DecisionType.Reject)
+                                  + (decision == DecisionType.Reject ? 1 : 0);
 
         var majorityThreshold = (totalMembers / 2) + 1;
         var majorityReached = approvalsAfterThis >= majorityThreshold;
+        var allVotesCast = session.Decisions.Count + 1 >= totalMembers;
 
         if (majorityReached)
         {
@@ -248,6 +251,27 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
                 session.Id, submissionId);
 
             return DecisionVoteResult.Success(sessionCompleted: true, finalResult: DecisionResult.Approved);
+        }
+
+        if (allVotesCast)
+        {
+            var finalResult = ResolveVotingResult(approvalsAfterThis, rejectionsAfterThis);
+            session.IsClosed = true;
+            session.ClosedAt = now;
+            session.Result = finalResult;
+
+            if (finalResult == DecisionResult.Approved)
+            {
+                submission.status = SubmissionStatusEnum.RequiresReview;
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Decision session {SessionId} completed for submission {SubmissionId}. Result: {Result}",
+                session.Id, submissionId, finalResult);
+
+            return DecisionVoteResult.Success(sessionCompleted: true, finalResult: finalResult);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -341,6 +365,39 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
 
         foreach (var session in expiredSessions)
         {
+            if (session.Mode == SubmissionDecisionMode.Voting)
+            {
+                await _dbContext.Entry(session)
+                    .Reference(s => s.Submission)
+                    .LoadAsync(cancellationToken);
+
+                await _dbContext.Entry(session)
+                    .Collection(s => s.Decisions)
+                    .LoadAsync(cancellationToken);
+
+                var approvalsCount = session.Decisions.Count(d => d.Decision == DecisionType.Approve);
+                var rejectionsCount = session.Decisions.Count(d => d.Decision == DecisionType.Reject);
+
+                if (approvalsCount + rejectionsCount > 0)
+                {
+                    var finalResult = ResolveVotingResult(approvalsCount, rejectionsCount);
+                    session.IsClosed = true;
+                    session.ClosedAt = now;
+                    session.Result = finalResult;
+
+                    if (finalResult == DecisionResult.Approved)
+                    {
+                        session.Submission.status = SubmissionStatusEnum.RequiresReview;
+                    }
+
+                    _logger.LogInformation(
+                        "Expired decision session {SessionId} closed for submission {SubmissionId}. Result: {Result}",
+                        session.Id, session.SubmissionId, finalResult);
+
+                    continue;
+                }
+            }
+
             session.IsClosed = true;
             session.ClosedAt = now;
             session.Result = DecisionResult.Expired;
@@ -545,5 +602,20 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             IsClosed: session.IsClosed,
             ClosedAt: session.ClosedAt,
             Result: session.Result);
+    }
+
+    private static DecisionResult ResolveVotingResult(int approvalsCount, int rejectionsCount)
+    {
+        if (approvalsCount > rejectionsCount)
+        {
+            return DecisionResult.Approved;
+        }
+
+        if (rejectionsCount > approvalsCount)
+        {
+            return DecisionResult.Rejected;
+        }
+
+        return Random.Shared.Next(2) == 0 ? DecisionResult.Approved : DecisionResult.Rejected;
     }
 }

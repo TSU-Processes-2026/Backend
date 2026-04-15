@@ -157,7 +157,7 @@ namespace Infrastructure.Grades
                 .FirstOrDefaultAsync()
                 ?? string.Empty;
 
-            var baseScore = teamGrade.Submission.grade?.score ?? 0;
+            var baseScore = ResolveBaseScore(teamGrade, studentId);
 
             return new TeamMemberGradeDto
             {
@@ -172,6 +172,38 @@ namespace Infrastructure.Grades
                 isAdjusted = resolvedAdjustment is not null,
                 adjustedAt = resolvedAdjustment?.AdjustedAt
             };
+        }
+
+        private static int ResolveBaseScore(TeamGrade teamGrade, Guid studentId)
+        {
+            var defaultScore = teamGrade.Submission.grade?.score ?? 0;
+
+            if (!teamGrade.RedistributeTotalScore || !teamGrade.TotalScore.HasValue)
+            {
+                return defaultScore;
+            }
+
+            var orderedMembers = teamGrade.Team.Members
+                .Select(x => x.UserId)
+                .OrderBy(x => x)
+                .ToList();
+
+            if (orderedMembers.Count == 0)
+            {
+                return defaultScore;
+            }
+
+            var memberIndex = orderedMembers.FindIndex(x => x == studentId);
+            if (memberIndex < 0)
+            {
+                return defaultScore;
+            }
+
+            var totalScore = teamGrade.TotalScore.Value;
+            var baseScore = totalScore / orderedMembers.Count;
+            var remainder = totalScore % orderedMembers.Count;
+
+            return memberIndex < remainder ? baseScore + 1 : baseScore;
         }
     }
 }

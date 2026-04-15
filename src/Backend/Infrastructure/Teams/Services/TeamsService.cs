@@ -747,11 +747,23 @@ public sealed class TeamsService : ITeamsService
             {
                 errors.Add("CaptainSelectionMode must be set when RequiresCaptain is true.");
             }
+            else
+            {
+                if (settings.DistributionMode is TeamDistributionMode.Manual or TeamDistributionMode.Random
+                    && settings.CaptainSelectionMode != CaptainSelectionMethod.Voting)
+                {
+                    errors.Add("CaptainSelectionMode must be Voting for Manual and Random distribution modes.");
+                }
+            }
 
             if (settings.CaptainVotingDeadlineDays.HasValue && settings.CaptainVotingDeadlineDays.Value <= 0)
             {
                 errors.Add("CaptainVotingDeadlineDays must be greater than zero.");
             }
+        }
+        else if (settings.DistributionMode == TeamDistributionMode.Draft)
+        {
+            errors.Add("RequiresCaptain must be true for Draft distribution mode.");
         }
 
         if (settings.RequiresDecision)

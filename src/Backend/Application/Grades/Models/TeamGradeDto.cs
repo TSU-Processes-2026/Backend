@@ -7,6 +7,8 @@ namespace Application.Grades.Models
         public Guid assignmentId { get; set; }
         public Guid submissionId { get; set; }
         public int score { get; set; }
+        public bool redistributeTotalScore { get; set; }
+        public int? totalScore { get; set; }
         public string verdictText { get; set; } = string.Empty;
         public DateTime verdictedAt { get; set; }
     }

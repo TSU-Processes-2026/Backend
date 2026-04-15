@@ -53,6 +53,11 @@ namespace Infrastructure.Grades
                 return TeamGradeAccessResult.Forbidden();
             }
 
+            if (!IsRedistributionRequestValid(request.redistributeTotalScore, request.totalScore))
+            {
+                return TeamGradeAccessResult.Forbidden();
+            }
+
             var existingGrade = await LoadTeamGradeAsync(teamId, assignmentId);
             if (existingGrade is not null)
             {
@@ -96,6 +101,8 @@ namespace Infrastructure.Grades
                 TeamId = team.Id,
                 AssignmentId = assignmentId,
                 SubmissionId = submission.id,
+                RedistributeTotalScore = request.redistributeTotalScore,
+                TotalScore = request.redistributeTotalScore ? request.totalScore : null,
                 Team = team,
                 Submission = submission
             };
@@ -120,6 +127,11 @@ namespace Infrastructure.Grades
                 return TeamGradeAccessResult.Forbidden();
             }
 
+            if (!IsRedistributionRequestValid(request.redistributeTotalScore, request.totalScore))
+            {
+                return TeamGradeAccessResult.Forbidden();
+            }
+
             var grade = teamGrade.Submission.grade;
             if (grade is null)
             {
@@ -129,6 +141,8 @@ namespace Infrastructure.Grades
             grade.score = request.score;
             grade.verdictText = request.verdictText ?? string.Empty;
             grade.verdictedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            teamGrade.RedistributeTotalScore = request.redistributeTotalScore;
+            teamGrade.TotalScore = request.redistributeTotalScore ? request.totalScore : null;
 
             await _dbContext.SaveChangesAsync();
 
@@ -165,6 +179,8 @@ namespace Infrastructure.Grades
                 assignmentId = teamGrade.AssignmentId,
                 submissionId = teamGrade.SubmissionId,
                 score = grade?.score ?? 0,
+                redistributeTotalScore = teamGrade.RedistributeTotalScore,
+                totalScore = teamGrade.TotalScore,
                 verdictText = grade?.verdictText ?? string.Empty,
                 verdictedAt = grade?.verdictedAt ?? _timeProvider.GetUtcNow().UtcDateTime
             });
@@ -240,9 +256,21 @@ namespace Infrastructure.Grades
                 assignmentId = teamGrade.AssignmentId,
                 submissionId = teamGrade.SubmissionId,
                 score = resolvedGrade?.score ?? 0,
+                redistributeTotalScore = teamGrade.RedistributeTotalScore,
+                totalScore = teamGrade.TotalScore,
                 verdictText = resolvedGrade?.verdictText ?? string.Empty,
                 verdictedAt = resolvedGrade?.verdictedAt ?? DateTime.MinValue
             };
+        }
+
+        private static bool IsRedistributionRequestValid(bool redistributeTotalScore, int? totalScore)
+        {
+            if (!redistributeTotalScore)
+            {
+                return true;
+            }
+
+            return totalScore.HasValue && totalScore.Value >= 0;
         }
     }
 }
