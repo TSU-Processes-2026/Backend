@@ -54,12 +54,6 @@ public sealed class TeamsService : ITeamsService
                 FixedTeamSize = snapshot.FixedTeamSize,
                 MinTeamSize = snapshot.MinTeamSize,
                 MaxTeamSize = snapshot.MaxTeamSize,
-                CaptainSelectionMode = null,
-                CaptainVotingDeadlineDays = null,
-                RequiresCaptain = false,
-                DecisionMode = null,
-                DecisionDeadlineDays = null,
-                RequiresDecision = false,
                 IsFinalized = false,
                 FinalizedAt = null,
                 CaptainSelectionMode = snapshot.CaptainSelectionMode,
@@ -1177,12 +1171,6 @@ public sealed class TeamsService : ITeamsService
             RequiresDecision = settings.RequiresDecision,
             IsFinalized = settings.IsFinalized,
             FinalizedAt = settings.FinalizedAt,
-            CaptainSelectionMode = settings.CaptainSelectionMode,
-            CaptainVotingDeadlineDays = settings.CaptainVotingDeadlineDays,
-            RequiresCaptain = settings.RequiresCaptain,
-            DecisionMode = settings.DecisionMode,
-            DecisionDeadlineDays = settings.DecisionDeadlineDays,
-            RequiresDecision = settings.RequiresDecision,
             Warnings = warnings
         };
     }
