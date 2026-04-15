@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Api.Authentication;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Api.Controllers
 {
@@ -32,13 +34,19 @@ namespace Api.Controllers
                 _ => StatusCode(500)
             };
         }
-
+        
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> CreateGrade(Guid submissionId, [FromBody] GradeRequest request)
         {
-            var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var teacherId = User.GetUserId();
 
-            var result = await _gradesService.CreateGradeAsync(submissionId, request.score, request.verdictText, teacherId);
+            if (!teacherId.HasValue)
+            {
+                return Unauthorized("In grade controller you are not authorized");
+            }
+
+            var result = await _gradesService.CreateGradeAsync(submissionId, request.score, request.verdictText, teacherId.Value.ToString());
 
             return result.Status switch
             {
@@ -49,12 +57,18 @@ namespace Api.Controllers
             };
         }
 
+        [Authorize]
         [HttpPut]
         public async Task<IActionResult> UpdateGrade(Guid submissionId, [FromBody] GradeRequest request)
         {
-            var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var teacherId = User.GetUserId();
 
-            var result = await _gradesService.UpdateGradeAsync(submissionId, request.score, request.verdictText, teacherId);
+            if (!teacherId.HasValue)
+            {
+                return Unauthorized("In grade controller you are not authorized");
+            }
+
+            var result = await _gradesService.UpdateGradeAsync(submissionId, request.score, request.verdictText, teacherId.Value.ToString());
 
             return result.Status switch
             {
@@ -65,12 +79,18 @@ namespace Api.Controllers
             };
         }
 
+        [Authorize]
         [HttpDelete]
         public async Task<IActionResult> DeleteGrade(Guid submissionId)
         {
-            var teacherId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var teacherId = User.GetUserId();
 
-            var result = await _gradesService.DeleteGradeAsync(submissionId, teacherId);
+            if (!teacherId.HasValue)
+            {
+                return Unauthorized("In grade controller you are not authorized");
+            }
+
+            var result = await _gradesService.DeleteGradeAsync(submissionId, teacherId.Value.ToString());
 
             return result.Status switch
             {
@@ -82,3 +102,4 @@ namespace Api.Controllers
         }
     }
 }
+ 

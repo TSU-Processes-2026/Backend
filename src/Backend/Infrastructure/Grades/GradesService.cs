@@ -41,16 +41,35 @@ namespace Infrastructure.Grades
         {
             var submission = await _dbContext.Submissions
                 .Include(s => s.post)
+                    .ThenInclude(p => p.Subject)
+                        .ThenInclude(su => su.Participants)
                 .FirstOrDefaultAsync(s => s.id == submissionId);
+
+
 
             if (submission == null)
                 return GradesAccessResult.NotFound();
 
             if (await SubmissionBelongsToTeamAsync(submission))
+            {
+                Console.WriteLine("Team error");
                 return GradesAccessResult.Forbidden();
+            }
+                
 
             if (submission.status != SubmissionStatusEnum.RequiresReview)
+            {
+                Console.WriteLine("Submission status error");
                 return GradesAccessResult.Forbidden();
+            }
+
+            //SubjectParticipant? participant = submission?.post?.Subject?.Participants?.Where(p => p.UserId.ToString() == teacherId && p.Role == "Teacher").FirstOrDefault();//.Where(p => p.id.ToString() == teacherId && p.)
+
+            //if (participant is null)
+            //{
+            //    Console.WriteLine("Participant error");
+            //    return GradesAccessResult.Forbidden();
+            //}
 
             var grade = new Grade
             {
