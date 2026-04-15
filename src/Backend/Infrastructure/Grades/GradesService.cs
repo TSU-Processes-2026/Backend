@@ -101,10 +101,16 @@ namespace Infrastructure.Grades
                 .FirstOrDefaultAsync(g => g.submissionId == submissionId);
 
             if (grade == null)
+            {
+                Console.WriteLine("Grade is null");
                 return GradesAccessResult.NotFound();
+            }
+                
 
             var submission = await _dbContext.Submissions
                 .Include(s => s.post)
+                    .ThenInclude(p => p.Subject)
+                        .ThenInclude(su => su.Participants)
                 .FirstOrDefaultAsync(s => s.id == submissionId);
 
             if (submission == null)
@@ -139,13 +145,19 @@ namespace Infrastructure.Grades
 
             var submission = await _dbContext.Submissions
                 .Include(s => s.post)
+                    .ThenInclude(p => p.Subject)
+                        .ThenInclude(su => su.Participants)
                 .FirstOrDefaultAsync(s => s.id == submissionId);
 
             if (submission == null)
                 return GradesAccessResult.NotFound();
 
             if (await SubmissionBelongsToTeamAsync(submission))
+            {
+                Console.WriteLine("Team error");
                 return GradesAccessResult.Forbidden();
+            }
+
 
             submission.status = SubmissionStatusEnum.RequiresReview;
 
