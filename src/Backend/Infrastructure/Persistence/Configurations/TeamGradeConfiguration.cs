@@ -24,6 +24,9 @@ public sealed class TeamGradeConfiguration : IEntityTypeConfiguration<TeamGrade>
         builder.Property(x => x.SubmissionId)
             .IsRequired();
 
+        builder.Property(x => x.RedistributeTotalScore)
+            .IsRequired();
+
         builder.HasIndex(x => new { x.TeamId, x.AssignmentId })
             .IsUnique();
 

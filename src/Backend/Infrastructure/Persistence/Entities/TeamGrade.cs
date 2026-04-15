@@ -6,6 +6,8 @@ namespace Infrastructure.Persistence.Entities
         public Guid TeamId { get; set; }
         public Guid AssignmentId { get; set; }
         public Guid SubmissionId { get; set; }
+        public bool RedistributeTotalScore { get; set; }
+        public int? TotalScore { get; set; }
 
         public Team Team { get; set; } = null!;
         public Submission Submission { get; set; } = null!;
