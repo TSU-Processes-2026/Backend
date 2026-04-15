@@ -40,9 +40,9 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             return DecisionSessionInitiateResult.NotFound("Submission not found.");
         }
 
-        if (submission.status != SubmissionStatusEnum.Draft)
+        if (submission.status == SubmissionStatusEnum.Graded)
         {
-            return DecisionSessionInitiateResult.InvalidOperation("Decision can only be initiated for submissions in Draft status.");
+            return DecisionSessionInitiateResult.InvalidOperation("Decision cannot be initiated for graded submissions.");
         }
 
         var subjectId = submission.post.SubjectId;
