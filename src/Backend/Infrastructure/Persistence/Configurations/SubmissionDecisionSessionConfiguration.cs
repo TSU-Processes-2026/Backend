@@ -22,6 +22,9 @@ public sealed class SubmissionDecisionSessionConfiguration : IEntityTypeConfigur
             .HasConversion<string>()
             .IsRequired();
 
+        builder.Property(x => x.RequiredDecisionsCount)
+            .IsRequired();
+
         builder.Property(x => x.StartedAt)
             .IsRequired();
 

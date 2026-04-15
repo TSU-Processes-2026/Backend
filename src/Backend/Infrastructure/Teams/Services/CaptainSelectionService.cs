@@ -236,6 +236,17 @@ public sealed class CaptainSelectionService : ICaptainSelectionService
             return CaptainSelectionResult.InvalidOperation("Cannot select captain for a team with no members.");
         }
 
+        var settings = await _dbContext.SubjectTeamSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SubjectId == subjectId, cancellationToken);
+
+        if (settings is not null
+            && settings.RequiresCaptain
+            && settings.DistributionMode is TeamDistributionMode.Manual or TeamDistributionMode.Random)
+        {
+            return CaptainSelectionResult.InvalidOperation("Captain must be selected by voting for Manual and Random distribution modes.");
+        }
+
         var memberIds = team.Members.Select(m => m.UserId).ToList();
         var randomIndex = Random.Shared.Next(memberIds.Count);
         var selectedCaptainId = memberIds[randomIndex];

@@ -61,6 +61,7 @@ public sealed class TeamsService : ITeamsService
                 RequiresCaptain = snapshot.RequiresCaptain,
                 DecisionMode = snapshot.DecisionMode,
                 DecisionDeadlineDays = snapshot.DecisionDeadlineDays,
+                RequiredDecisionVotes = snapshot.RequiredDecisionVotes,
                 RequiresDecision = snapshot.RequiresDecision,
                 Warnings = warnings
             });
@@ -94,10 +95,12 @@ public sealed class TeamsService : ITeamsService
         var requiresDecision = request.RequiresDecision ?? existing?.RequiresDecision ?? false;
         var decisionMode = request.DecisionMode ?? existing?.DecisionMode;
         var decisionDeadlineDays = request.DecisionDeadlineDays ?? existing?.DecisionDeadlineDays;
+        var requiredDecisionVotes = request.RequiredDecisionVotes ?? existing?.RequiredDecisionVotes;
         if (!requiresDecision)
         {
             decisionMode = null;
             decisionDeadlineDays = null;
+            requiredDecisionVotes = null;
         }
 
         var snapshot = new SettingsSnapshot(
@@ -111,6 +114,7 @@ public sealed class TeamsService : ITeamsService
             requiresCaptain,
             decisionMode,
             decisionDeadlineDays,
+            requiredDecisionVotes,
             requiresDecision);
 
         var errors = ValidateSettings(snapshot);
@@ -131,12 +135,13 @@ public sealed class TeamsService : ITeamsService
         settings.FixedTeamSize = request.FixedTeamSize;
         settings.MinTeamSize = request.MinTeamSize;
         settings.MaxTeamSize = request.MaxTeamSize;
-        settings.CaptainSelectionMode = request.CaptainSelectionMode ?? existing?.CaptainSelectionMode;
-        settings.CaptainVotingDeadlineDays = request.CaptainVotingDeadlineDays ?? existing?.CaptainVotingDeadlineDays;
-        settings.RequiresCaptain = request.RequiresCaptain ?? existing?.RequiresCaptain ?? false;
-        settings.DecisionMode = request.DecisionMode ?? existing?.DecisionMode;
-        settings.DecisionDeadlineDays = request.DecisionDeadlineDays ?? existing?.DecisionDeadlineDays;
-        settings.RequiresDecision = request.RequiresDecision ?? existing?.RequiresDecision ?? false;
+        settings.CaptainSelectionMode = captainSelectionMode;
+        settings.CaptainVotingDeadlineDays = captainVotingDeadlineDays;
+        settings.RequiresCaptain = requiresCaptain;
+        settings.DecisionMode = decisionMode;
+        settings.DecisionDeadlineDays = decisionDeadlineDays;
+        settings.RequiredDecisionVotes = requiredDecisionVotes;
+        settings.RequiresDecision = requiresDecision;
         settings.IsFinalized = false;
         settings.FinalizedAt = null;
 
@@ -263,7 +268,7 @@ public sealed class TeamsService : ITeamsService
         }
 
         var snapshot = settings is null
-            ? new SettingsSnapshot(TeamDistributionMode.Random, null, null, null, null, null, null, false, null, null, false)
+            ? new SettingsSnapshot(TeamDistributionMode.Random, null, null, null, null, null, null, false, null, null, null, false)
             : SettingsSnapshot.From(settings);
 
         var students = await _dbContext.SubjectParticipants
@@ -785,6 +790,22 @@ public sealed class TeamsService : ITeamsService
             {
                 errors.Add("DecisionDeadlineDays must be greater than zero.");
             }
+
+            if (settings.RequiredDecisionVotes.HasValue && settings.RequiredDecisionVotes.Value <= 0)
+            {
+                errors.Add("RequiredDecisionVotes must be greater than zero.");
+            }
+
+            if (settings.DecisionMode == SubmissionDecisionMode.CaptainDecides
+                && settings.RequiredDecisionVotes.HasValue
+                && settings.RequiredDecisionVotes.Value != 1)
+            {
+                errors.Add("RequiredDecisionVotes must be 1 for CaptainDecides mode.");
+            }
+        }
+        else if (settings.RequiredDecisionVotes.HasValue)
+        {
+            errors.Add("RequiredDecisionVotes can be set only when RequiresDecision is true.");
         }
 
         return errors;
@@ -1039,6 +1060,7 @@ public sealed class TeamsService : ITeamsService
             false,
             null,
             null,
+            null,
             false);
 
         var candidateCounts = GetBalancedTeamCounts(totalStudents, boundsOnlySettings);
@@ -1180,6 +1202,7 @@ public sealed class TeamsService : ITeamsService
             RequiresCaptain = settings.RequiresCaptain,
             DecisionMode = settings.DecisionMode,
             DecisionDeadlineDays = settings.DecisionDeadlineDays,
+            RequiredDecisionVotes = settings.RequiredDecisionVotes,
             RequiresDecision = settings.RequiresDecision,
             IsFinalized = settings.IsFinalized,
             FinalizedAt = settings.FinalizedAt,
@@ -1883,13 +1906,14 @@ public sealed class TeamsService : ITeamsService
         bool RequiresCaptain,
         SubmissionDecisionMode? DecisionMode,
         int? DecisionDeadlineDays,
+        int? RequiredDecisionVotes,
         bool RequiresDecision)
     {
         public static SettingsSnapshot From(SubjectTeamSettings? settings)
         {
             if (settings is null)
             {
-                return new SettingsSnapshot(TeamDistributionMode.Manual, null, null, null, null, null, null, false, null, null, false);
+                return new SettingsSnapshot(TeamDistributionMode.Manual, null, null, null, null, null, null, false, null, null, null, false);
             }
 
             return new SettingsSnapshot(
@@ -1903,6 +1927,7 @@ public sealed class TeamsService : ITeamsService
                 settings.RequiresCaptain,
                 settings.DecisionMode,
                 settings.DecisionDeadlineDays,
+                settings.RequiredDecisionVotes,
                 settings.RequiresDecision);
         }
     }

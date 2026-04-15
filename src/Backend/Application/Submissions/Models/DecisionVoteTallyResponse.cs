@@ -4,9 +4,10 @@ public sealed record DecisionVoteTallyResponse(
     Guid SessionId,
     Guid SubmissionId,
     int TotalTeamMembers,
+    int RequiredDecisionsCount,
     int TotalDecisions,
     int ApprovalsCount,
     int RejectionsCount,
-    bool MajorityReached,
+    bool RequiredDecisionsReached,
     bool IsClosed,
     DecisionResult? Result);

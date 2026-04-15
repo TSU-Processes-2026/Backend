@@ -14,5 +14,6 @@ public sealed class TeamSettingsRequest
     public bool? RequiresCaptain { get; init; }
     public SubmissionDecisionMode? DecisionMode { get; init; }
     public int? DecisionDeadlineDays { get; init; }
+    public int? RequiredDecisionVotes { get; init; }
     public bool? RequiresDecision { get; init; }
 }

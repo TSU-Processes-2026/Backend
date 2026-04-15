@@ -85,6 +85,23 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             return DecisionSessionInitiateResult.AlreadyActive(MapSession(submission.DecisionSession));
         }
 
+        var totalMembers = team.Members.Count;
+        if (totalMembers <= 0)
+        {
+            return DecisionSessionInitiateResult.InvalidOperation("Team has no members.");
+        }
+
+        var requiredDecisionsCount = settings.RequiredDecisionVotes ?? (decisionMode == SubmissionDecisionMode.CaptainDecides ? 1 : totalMembers);
+        if (requiredDecisionsCount < 1 || requiredDecisionsCount > totalMembers)
+        {
+            return DecisionSessionInitiateResult.InvalidOperation("Required decisions count must be between 1 and team member count.");
+        }
+
+        if (decisionMode == SubmissionDecisionMode.CaptainDecides && requiredDecisionsCount != 1)
+        {
+            return DecisionSessionInitiateResult.InvalidOperation("Required decisions count must be 1 for captain decision mode.");
+        }
+
         var deadlineDays = settings.DecisionDeadlineDays ?? DefaultDecisionDeadlineDays;
         var now = _timeProvider.GetUtcNow();
 
@@ -93,6 +110,7 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             Id = Guid.NewGuid(),
             SubmissionId = submissionId,
             Mode = decisionMode,
+            RequiredDecisionsCount = requiredDecisionsCount,
             StartedAt = now,
             DeadlineAt = now.AddDays(deadlineDays),
             IsClosed = false
@@ -152,6 +170,7 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             SessionId: session.Id,
             SubmissionId: session.SubmissionId,
             Mode: session.Mode,
+            RequiredDecisionsCount: session.RequiredDecisionsCount,
             StartedAt: session.StartedAt,
             DeadlineAt: session.DeadlineAt,
             IsClosed: session.IsClosed,
@@ -226,34 +245,15 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
 
         _dbContext.SubmissionDecisions.Add(newDecision);
 
-        var totalMembers = team.Members.Count;
         var approvalsAfterThis = session.Decisions.Count(d => d.Decision == DecisionType.Approve)
                                  + (decision == DecisionType.Approve ? 1 : 0);
         var rejectionsAfterThis = session.Decisions.Count(d => d.Decision == DecisionType.Reject)
                                   + (decision == DecisionType.Reject ? 1 : 0);
 
-        var majorityThreshold = (totalMembers / 2) + 1;
-        var majorityReached = approvalsAfterThis >= majorityThreshold;
-        var allVotesCast = session.Decisions.Count + 1 >= totalMembers;
+        var decisionsAfterThis = session.Decisions.Count + 1;
+        var requiredDecisionsReached = decisionsAfterThis >= session.RequiredDecisionsCount;
 
-        if (majorityReached)
-        {
-            session.IsClosed = true;
-            session.ClosedAt = now;
-            session.Result = DecisionResult.Approved;
-
-            submission.status = SubmissionStatusEnum.RequiresReview;
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Decision session {SessionId} completed for submission {SubmissionId}. Result: Approved (majority reached)",
-                session.Id, submissionId);
-
-            return DecisionVoteResult.Success(sessionCompleted: true, finalResult: DecisionResult.Approved);
-        }
-
-        if (allVotesCast)
+        if (requiredDecisionsReached)
         {
             var finalResult = ResolveVotingResult(approvalsAfterThis, rejectionsAfterThis);
             session.IsClosed = true;
@@ -320,17 +320,17 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
         var approvalsCount = session.Decisions.Count(d => d.Decision == DecisionType.Approve);
         var rejectionsCount = session.Decisions.Count(d => d.Decision == DecisionType.Reject);
         var totalMembers = team?.Members.Count ?? 0;
-        var majorityThreshold = (totalMembers / 2) + 1;
-        var majorityReached = approvalsCount >= majorityThreshold;
+        var requiredDecisionsReached = session.Decisions.Count >= session.RequiredDecisionsCount;
 
         var response = new DecisionVoteTallyResponse(
             SessionId: session.Id,
             SubmissionId: session.SubmissionId,
             TotalTeamMembers: totalMembers,
+            RequiredDecisionsCount: session.RequiredDecisionsCount,
             TotalDecisions: session.Decisions.Count,
             ApprovalsCount: approvalsCount,
             RejectionsCount: rejectionsCount,
-            MajorityReached: majorityReached,
+            RequiredDecisionsReached: requiredDecisionsReached,
             IsClosed: session.IsClosed,
             Result: session.Result);
 
@@ -597,6 +597,7 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             SessionId: session.Id,
             SubmissionId: session.SubmissionId,
             Mode: session.Mode,
+            RequiredDecisionsCount: session.RequiredDecisionsCount,
             StartedAt: session.StartedAt,
             DeadlineAt: session.DeadlineAt,
             IsClosed: session.IsClosed,
