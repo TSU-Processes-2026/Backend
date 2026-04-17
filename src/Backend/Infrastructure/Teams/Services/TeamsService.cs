@@ -93,7 +93,8 @@ public sealed class TeamsService : ITeamsService
         }
 
         var requiresDecision = request.RequiresDecision ?? existing?.RequiresDecision ?? false;
-        var decisionMode = request.DecisionMode ?? existing?.DecisionMode;
+        SubmissionDecisionMode? decisionMode =
+            request.DecisionMode ?? existing?.DecisionMode ?? SubmissionDecisionMode.Voting;
         var decisionDeadlineDays = request.DecisionDeadlineDays ?? existing?.DecisionDeadlineDays;
         var requiredDecisionVotes = request.RequiredDecisionVotes ?? existing?.RequiredDecisionVotes;
         if (!requiresDecision)
@@ -776,10 +777,6 @@ public sealed class TeamsService : ITeamsService
             if (settings.DecisionMode is null)
             {
                 errors.Add("DecisionMode must be set when RequiresDecision is true.");
-            }
-            else if (settings.DecisionMode == SubmissionDecisionMode.Voting && settings.RequiresCaptain)
-            {
-                errors.Add("DecisionMode Voting cannot be used when RequiresCaptain is true.");
             }
             else if (settings.DecisionMode == SubmissionDecisionMode.CaptainDecides && !settings.RequiresCaptain)
             {

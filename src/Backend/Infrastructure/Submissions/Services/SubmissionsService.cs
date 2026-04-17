@@ -50,6 +50,15 @@ namespace Infrastructure.Submissions.Services
             if (!isStudent)
                 return SubmissionAccessResult.Forbidden();
 
+            var existingSubmission = await _dbContext.Submissions
+                .Include(x => x.answers)
+                .Include(x => x.DecisionSession)
+                .Include(x => x.TeamGrade)
+                .FirstOrDefaultAsync(x =>
+                    x.assignmentId == assignmentId &&
+                    x.authorId == authorId &&
+                    x.status != SubmissionStatusEnum.Graded);
+
             var answers = request.answers.Select(a => new AnswerItem
             {
                 id = Guid.NewGuid(),
@@ -59,6 +68,28 @@ namespace Infrastructure.Submissions.Services
                 selectedOptionsId = a.selectedOptionIds,
                 text = a.text
             }).ToList();
+
+            if (existingSubmission is not null)
+            {
+                if (existingSubmission.status != SubmissionStatusEnum.Draft)
+                {
+                    return SubmissionAccessResult.Success(MapToDto(existingSubmission));
+                }
+
+                existingSubmission.answers ??= new List<AnswerItem>();
+                existingSubmission.answers.Clear();
+
+                foreach (var answer in answers)
+                {
+                    existingSubmission.answers.Add(answer);
+                }
+
+                existingSubmission.submittedAt = DateTime.UtcNow;
+
+                await _dbContext.SaveChangesAsync();
+
+                return SubmissionAccessResult.Success(MapToDto(existingSubmission));
+            }
 
             var submission = new Submission
             {
@@ -82,6 +113,8 @@ namespace Infrastructure.Submissions.Services
             var submissions = await _dbContext.Submissions
                 .Where(x => x.assignmentId == assignmentId)
                 .Include(x => x.answers)
+                .Include(x => x.DecisionSession)
+                .Include(x => x.TeamGrade)
                 .Skip(offset)
                 .Take(limit)
                 .ToListAsync();
@@ -94,6 +127,8 @@ namespace Infrastructure.Submissions.Services
             var submissions = await _dbContext.Submissions
                 .Where(x => x.assignmentId == assignmentId && x.authorId == authorId)
                 .Include(x => x.answers)
+                .Include(x => x.DecisionSession)
+                .Include(x => x.TeamGrade)
                 .Skip(offset)
                 .Take(limit)
                 .ToListAsync();
@@ -105,6 +140,8 @@ namespace Infrastructure.Submissions.Services
         {
             var submission = await _dbContext.Submissions
                 .Include(x => x.answers)
+                .Include(x => x.DecisionSession)
+                .Include(x => x.TeamGrade)
                 .FirstOrDefaultAsync(x => x.id == submissionId);
 
             if (submission == null)
@@ -191,6 +228,11 @@ namespace Infrastructure.Submissions.Services
                 authorId = submission.authorId,
                 status = submission.status,
                 submittedAt = submission.submittedAt,
+                decisionResult = submission.DecisionSession?.Result,
+                hasDecisionSession = submission.DecisionSession is not null,
+                isDecisionSessionClosed = submission.DecisionSession?.IsClosed ?? false,
+                isFinalTeamDecision = submission.DecisionSession?.IsClosed == true
+                    && submission.DecisionSession.Result == DecisionResult.Approved,
                 answers = submission.answers?.Select(a => new AnswerItemDto
                 {
                     id = a.id,
