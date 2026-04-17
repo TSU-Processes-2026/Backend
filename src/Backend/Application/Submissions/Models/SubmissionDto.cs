@@ -14,5 +14,9 @@ namespace Application.Submissions.Models
         public List<AnswerItemDto>? answers { get; set; }
         public SubmissionStatusEnum status { get; set; }
         public DateTime submittedAt { get; set; }
+        public DecisionResult? decisionResult { get; set; }
+        public bool hasDecisionSession { get; set; }
+        public bool isDecisionSessionClosed { get; set; }
+        public bool isFinalTeamDecision { get; set; }
     }
 }

@@ -68,21 +68,20 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
 
         var decisionMode = settings.DecisionMode ?? SubmissionDecisionMode.Voting;
 
-        // Voting mode is only allowed when there is no captain
-        if (decisionMode == SubmissionDecisionMode.Voting && team.CaptainUserId is not null)
-        {
-            return DecisionSessionInitiateResult.InvalidOperation("Voting mode is only allowed when the team has no captain.");
-        }
-
-        // CaptainDecides mode requires a captain
+        // Fallback to team voting if captain mode is configured but captain is not assigned yet.
         if (decisionMode == SubmissionDecisionMode.CaptainDecides && team.CaptainUserId is null)
         {
-            return DecisionSessionInitiateResult.NoCaptain();
+            decisionMode = SubmissionDecisionMode.Voting;
         }
 
         if (submission.DecisionSession is not null && !submission.DecisionSession.IsClosed)
         {
             return DecisionSessionInitiateResult.AlreadyActive(MapSession(submission.DecisionSession));
+        }
+
+        if (await HasApprovedDecisionForTeamAssignmentAsync(team.Id, submission.assignmentId, submissionId, cancellationToken))
+        {
+            return DecisionSessionInitiateResult.InvalidOperation("Another submission of the team is already selected as the final decision.");
         }
 
         var totalMembers = team.Members.Count;
@@ -264,6 +263,14 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             {
                 submission.status = SubmissionStatusEnum.RequiresReview;
             }
+
+            await CloseSiblingDecisionSessionsAsync(
+                team.Id,
+                submission.assignmentId,
+                submissionId,
+                finalResult == DecisionResult.Approved ? DecisionResult.Rejected : DecisionResult.Expired,
+                now,
+                cancellationToken);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -479,6 +486,14 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             submission.status = SubmissionStatusEnum.RequiresReview;
         }
 
+        await CloseSiblingDecisionSessionsAsync(
+            team.Id,
+            submission.assignmentId,
+            submissionId,
+            session.Result == DecisionResult.Approved ? DecisionResult.Rejected : DecisionResult.Expired,
+            now,
+            cancellationToken);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -603,6 +618,68 @@ public sealed class SubmissionDecisionService : ISubmissionDecisionService
             IsClosed: session.IsClosed,
             ClosedAt: session.ClosedAt,
             Result: session.Result);
+    }
+
+    private async Task<bool> HasApprovedDecisionForTeamAssignmentAsync(
+        Guid teamId,
+        Guid assignmentId,
+        Guid excludedSubmissionId,
+        CancellationToken cancellationToken)
+    {
+        var teamMemberIds = await _dbContext.TeamMembers
+            .Where(x => x.TeamId == teamId)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        if (teamMemberIds.Count == 0)
+        {
+            return false;
+        }
+
+        return await _dbContext.SubmissionDecisionSessions
+            .Include(x => x.Submission)
+            .AnyAsync(
+                x => x.SubmissionId != excludedSubmissionId
+                    && x.IsClosed
+                    && x.Result == DecisionResult.Approved
+                    && x.Submission.assignmentId == assignmentId
+                    && teamMemberIds.Contains(x.Submission.authorId),
+                cancellationToken);
+    }
+
+    private async Task CloseSiblingDecisionSessionsAsync(
+        Guid teamId,
+        Guid assignmentId,
+        Guid selectedSubmissionId,
+        DecisionResult siblingResult,
+        DateTimeOffset closedAt,
+        CancellationToken cancellationToken)
+    {
+        var teamMemberIds = await _dbContext.TeamMembers
+            .Where(x => x.TeamId == teamId)
+            .Select(x => x.UserId)
+            .ToListAsync(cancellationToken);
+
+        if (teamMemberIds.Count == 0)
+        {
+            return;
+        }
+
+        var siblingSessions = await _dbContext.SubmissionDecisionSessions
+            .Include(x => x.Submission)
+            .Where(x =>
+                !x.IsClosed &&
+                x.SubmissionId != selectedSubmissionId &&
+                x.Submission.assignmentId == assignmentId &&
+                teamMemberIds.Contains(x.Submission.authorId))
+            .ToListAsync(cancellationToken);
+
+        foreach (var siblingSession in siblingSessions)
+        {
+            siblingSession.IsClosed = true;
+            siblingSession.ClosedAt = closedAt;
+            siblingSession.Result = siblingResult;
+        }
     }
 
     private static DecisionResult ResolveVotingResult(int approvalsCount, int rejectionsCount)
