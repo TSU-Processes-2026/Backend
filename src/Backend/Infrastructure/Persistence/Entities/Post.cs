@@ -12,6 +12,8 @@ public sealed class Post
     public string? StoragePath { get; set; }
     public long? FileSize { get; set; }
     public string? AssignmentData { get; set; }
+    public bool SelfAssessmentEnabled { get; set; }
+    public DateTimeOffset? SelfAssessmentVisibilityDate { get; set; }
     public required Subject Subject { get; set; }
     public ICollection<AssignmentQuestion> Questions { get; set; } = new List<AssignmentQuestion>();
 }

@@ -40,6 +40,36 @@ public sealed class SubmissionsController : ControllerBase
         return Created($"/api/submissions/{result.Submission!.id}", result.Submission);
     }
 
+    [Authorize]
+    [HttpPost("tasks/{taskId}/submissions")]
+    [ProducesResponseType(typeof(SubmissionDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateSubmissionWithSelfAssessment(
+        [FromRoute] Guid taskId,
+        [FromBody] SubmissionWithSelfAssessmentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var result = await _submissionsService.CreateSubmissionWithSelfAssessment(
+            taskId,
+            userId.Value,
+            request,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            SubmissionAccessStatus.Success => Created($"/api/submissions/{result.Submission!.id}", result.Submission),
+            SubmissionAccessStatus.NotFound => NotFound(CreateNotFound()),
+            SubmissionAccessStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported submission create status.")
+        };
+    }
+
     [HttpGet("assignments/{assignmentId}/submissions")]
     public async Task<IActionResult> GetSubmissions(
         Guid assignmentId,
@@ -117,5 +147,35 @@ public sealed class SubmissionsController : ControllerBase
             return Forbid();
 
         return Ok(result.Submission);
+    }
+
+    private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateUnauthorized()
+    {
+        return new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Title = "Unauthorized",
+            Status = StatusCodes.Status401Unauthorized,
+            Detail = "Authentication failed."
+        };
+    }
+
+    private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateForbidden()
+    {
+        return new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Title = "Forbidden",
+            Status = StatusCodes.Status403Forbidden,
+            Detail = "Access denied."
+        };
+    }
+
+    private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateNotFound()
+    {
+        return new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Title = "Not Found",
+            Status = StatusCodes.Status404NotFound,
+            Detail = "Resource not found."
+        };
     }
 }
