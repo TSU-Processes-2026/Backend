@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Authorization;
 namespace Api.Controllers
 {
     [ApiController]
-    [Route("api/submissions/{submissionId}/grade")]
     public class GradesController : ControllerBase
     {
         private readonly IGradesService _gradesService;
@@ -21,7 +20,7 @@ namespace Api.Controllers
             _gradesService = gradesService;
         }
 
-        [HttpGet]
+        [HttpGet("api/submissions/{submissionId}/grade")]
         public async Task<IActionResult> GetGrade(Guid submissionId)
         {
             var result = await _gradesService.GetGradeAsync(submissionId);
@@ -36,7 +35,7 @@ namespace Api.Controllers
         }
         
         [Authorize]
-        [HttpPost]
+        [HttpPost("api/submissions/{submissionId}/grade")]
         public async Task<IActionResult> CreateGrade(Guid submissionId, [FromBody] GradeRequest request)
         {
             var teacherId = User.GetUserId();
@@ -58,7 +57,7 @@ namespace Api.Controllers
         }
 
         [Authorize]
-        [HttpPut]
+        [HttpPut("api/submissions/{submissionId}/grade")]
         public async Task<IActionResult> UpdateGrade(Guid submissionId, [FromBody] GradeRequest request)
         {
             var teacherId = User.GetUserId();
@@ -80,7 +79,7 @@ namespace Api.Controllers
         }
 
         [Authorize]
-        [HttpDelete]
+        [HttpDelete("api/submissions/{submissionId}/grade")]
         public async Task<IActionResult> DeleteGrade(Guid submissionId)
         {
             var teacherId = User.GetUserId();
@@ -98,6 +97,88 @@ namespace Api.Controllers
                 GradesAccessStatus.NotFound => NotFound(),
                 GradesAccessStatus.Forbidden => Forbid(),
                 _ => StatusCode(500)
+            };
+        }
+
+        [Authorize]
+        [HttpGet("api/courses/{id:guid}/grades")]
+        [ProducesResponseType(typeof(IReadOnlyList<CourseGradeDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetCourseGrades([FromRoute] Guid id, CancellationToken cancellationToken)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var result = await _gradesService.GetCourseGradesAsync(userId.Value, id, cancellationToken);
+
+            return result.Status switch
+            {
+                CourseGradesListStatus.Success => Ok(result.Grades),
+                CourseGradesListStatus.NotFound => NotFound(CreateNotFound()),
+                CourseGradesListStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+                _ => throw new InvalidOperationException("Unsupported course grades list status.")
+            };
+        }
+
+        [Authorize]
+        [HttpPost("api/courses/{id:guid}/calculate-grades")]
+        [ProducesResponseType(typeof(IReadOnlyList<CourseGradeDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> CalculateCourseGrades([FromRoute] Guid id, CancellationToken cancellationToken)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var result = await _gradesService.CalculateCourseGradesAsync(userId.Value, id, cancellationToken);
+
+            return result.Status switch
+            {
+                CourseGradesCalculateStatus.Success => Ok(result.Grades),
+                CourseGradesCalculateStatus.NotFound => NotFound(CreateNotFound()),
+                CourseGradesCalculateStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+                _ => throw new InvalidOperationException("Unsupported course grades calculate status.")
+            };
+        }
+
+        private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateUnauthorized()
+        {
+            return new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Unauthorized",
+                Status = StatusCodes.Status401Unauthorized,
+                Detail = "Authentication failed."
+            };
+        }
+
+        private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateForbidden()
+        {
+            return new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Forbidden",
+                Status = StatusCodes.Status403Forbidden,
+                Detail = "Access denied."
+            };
+        }
+
+        private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateNotFound()
+        {
+            return new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Not Found",
+                Status = StatusCodes.Status404NotFound,
+                Detail = "Resource not found."
             };
         }
     }
