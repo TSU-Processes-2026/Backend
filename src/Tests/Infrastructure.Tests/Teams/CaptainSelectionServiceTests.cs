@@ -197,6 +197,7 @@ public sealed class CaptainSelectionServiceTests
             Id = subjectId,
             Title = "Test Subject",
             Description = "Test",
+            GradingMode = "five_point",
             Participants = new List<SubjectParticipant>()
         };
 

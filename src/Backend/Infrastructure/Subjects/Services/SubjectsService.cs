@@ -30,6 +30,7 @@ public sealed class SubjectsService : ISubjectsService
             Id = Guid.NewGuid(),
             Title = request.Title ?? string.Empty,
             Description = request.Description ?? string.Empty,
+            GradingMode = "five_point",
             Participants = new List<SubjectParticipant>()
         };
 

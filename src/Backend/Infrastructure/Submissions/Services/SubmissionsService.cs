@@ -108,6 +108,145 @@ namespace Infrastructure.Submissions.Services
             return SubmissionAccessResult.Success(MapToDto(submission));
         }
 
+        public async Task<SubmissionAccessResult> CreateSubmissionWithSelfAssessment(
+            Guid taskId,
+            Guid authorId,
+            SubmissionWithSelfAssessmentRequest request,
+            CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByIdAsync(authorId.ToString());
+            if (user == null)
+                return SubmissionAccessResult.NotFound();
+
+            var task = await _dbContext.Posts
+                .Include(x => x.Subject)
+                .SingleOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+
+            if (task == null)
+                return SubmissionAccessResult.NotFound();
+
+            var isStudent = await _dbContext.SubjectParticipants
+                .AnyAsync(x =>
+                    x.SubjectId == task.SubjectId &&
+                    x.UserId == authorId &&
+                    x.Role == StudentRole, cancellationToken);
+
+            if (!isStudent)
+                return SubmissionAccessResult.Forbidden();
+
+            // Check self-assessment requirements
+            if (task.SelfAssessmentEnabled)
+            {
+                var now = DateTimeOffset.UtcNow;
+                var visibilityDate = task.SelfAssessmentVisibilityDate;
+
+                // If visibility date is set and not yet reached, criteria are hidden
+                if (visibilityDate.HasValue && now < visibilityDate.Value)
+                {
+                    return SubmissionAccessResult.Forbidden();
+                }
+
+                // Self-assessments are required when enabled
+                if (request.SelfAssessments == null || !request.SelfAssessments.Any())
+                {
+                    return SubmissionAccessResult.Forbidden();
+                }
+
+                // Validate that all criteria have self-assessments
+                var criteria = await _dbContext.Criteria
+                    .Where(c => c.TaskId == taskId)
+                    .ToListAsync(cancellationToken);
+
+                var providedCriterionIds = request.SelfAssessments.Select(s => s.CriterionId).ToHashSet();
+
+                foreach (var criterion in criteria)
+                {
+                    if (!providedCriterionIds.Contains(criterion.Id))
+                    {
+                        return SubmissionAccessResult.Forbidden();
+                    }
+                }
+            }
+
+            var existingSubmission = await _dbContext.Submissions
+                .Include(x => x.CriterionResults)
+                .FirstOrDefaultAsync(x =>
+                    x.assignmentId == taskId &&
+                    x.authorId == authorId &&
+                    x.status != SubmissionStatusEnum.Graded, cancellationToken);
+
+            if (existingSubmission is not null)
+            {
+                if (existingSubmission.status != SubmissionStatusEnum.Draft)
+                {
+                    return SubmissionAccessResult.Success(MapToDto(existingSubmission));
+                }
+
+                // Update existing submission
+                if (task.SelfAssessmentEnabled && request.SelfAssessments != null)
+                {
+                    existingSubmission.CriterionResults ??= new List<CriterionResult>();
+                    existingSubmission.CriterionResults.Clear();
+
+                    foreach (var selfAssessment in request.SelfAssessments)
+                    {
+                        existingSubmission.CriterionResults.Add(new CriterionResult
+                        {
+                            Id = Guid.NewGuid(),
+                            SubmissionId = existingSubmission.id,
+                            CriterionId = selfAssessment.CriterionId,
+                            Value = selfAssessment.Value,
+                            Comment = selfAssessment.Comment,
+                            CreatedBy = authorId.ToString(),
+                            AssessmentType = "SELF"
+                        });
+                    }
+                }
+
+                existingSubmission.submittedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                return SubmissionAccessResult.Success(MapToDto(existingSubmission));
+            }
+
+            // Create new submission
+            var submission = new Submission
+            {
+                id = Guid.NewGuid(),
+                assignmentId = taskId,
+                authorId = authorId,
+                post = task,
+                status = SubmissionStatusEnum.Draft,
+                submittedAt = DateTime.UtcNow
+            };
+
+            var criterionResults = new List<CriterionResult>();
+
+            if (task.SelfAssessmentEnabled && request.SelfAssessments != null)
+            {
+                foreach (var selfAssessment in request.SelfAssessments)
+                {
+                    criterionResults.Add(new CriterionResult
+                    {
+                        Id = Guid.NewGuid(),
+                        SubmissionId = submission.id,
+                        CriterionId = selfAssessment.CriterionId,
+                        Value = selfAssessment.Value,
+                        Comment = selfAssessment.Comment,
+                        CreatedBy = authorId.ToString(),
+                        AssessmentType = "SELF"
+                    });
+                }
+            }
+
+            submission.CriterionResults = criterionResults;
+
+            _dbContext.Submissions.Add(submission);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return SubmissionAccessResult.Success(MapToDto(submission));
+        }
+
         public async Task<List<SubmissionDto>> GetSubmissions(Guid assignmentId, int limit, int offset)
         {
             var submissions = await _dbContext.Submissions

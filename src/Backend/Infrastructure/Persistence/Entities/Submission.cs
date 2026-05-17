@@ -25,5 +25,6 @@ namespace Infrastructure.Persistence.Entities
         public SubmissionDecisionSession? DecisionSession { get; set; }
         [JsonIgnore]
         public TeamGrade? TeamGrade { get; set; }
+        public ICollection<CriterionResult> CriterionResults { get; set; } = new List<CriterionResult>();
     }
 }

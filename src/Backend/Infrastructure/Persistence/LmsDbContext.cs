@@ -34,6 +34,10 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<SubmissionDecisionSession> SubmissionDecisionSessions => Set<SubmissionDecisionSession>();
     public DbSet<SubmissionDecision> SubmissionDecisions => Set<SubmissionDecision>();
     public DbSet<DraftState> DraftStates => Set<DraftState>();
+    public DbSet<Criterion> Criteria => Set<Criterion>();
+    public DbSet<CriterionResult> CriterionResults => Set<CriterionResult>();
+    public DbSet<GradeScale> GradeScales => Set<GradeScale>();
+    public DbSet<CourseGrade> CourseGrades => Set<CourseGrade>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

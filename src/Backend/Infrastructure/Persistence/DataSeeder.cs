@@ -139,6 +139,7 @@ public static class DataSeeder
             Id = Guid.NewGuid(),
             Title = seededSubjectTitle,
             Description = "Subject created by DataSeeder for quick local testing.",
+            GradingMode = "five_point",
             Participants = new List<SubjectParticipant>()
         };
 
