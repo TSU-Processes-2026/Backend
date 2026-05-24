@@ -198,7 +198,7 @@ public sealed class CriteriaService : ICriteriaService
             .Where(x => x.TaskId == submission.assignmentId)
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
-        if (request.Results.Any(x => !criteria.ContainsKey(x.CriterionId) || !IsValidResultValue(criteria[x.CriterionId].Format, x.Value)))
+        if (request.Results.Any(x => !criteria.ContainsKey(x.CriterionId) || !IsValidResultValue(criteria[x.CriterionId].Format, x.Value, criteria[x.CriterionId].MaxPoints)))
         {
             return CriterionResultsUpdateResult.Forbidden();
         }
@@ -289,7 +289,7 @@ public sealed class CriteriaService : ICriteriaService
         return false;
     }
 
-    private static bool IsValidResultValue(string format, decimal value)
+    private static bool IsValidResultValue(string format, decimal value, decimal? maxPoints = null)
     {
         if (string.Equals(format, ChecklistFormat, StringComparison.Ordinal))
         {
@@ -303,7 +303,7 @@ public sealed class CriteriaService : ICriteriaService
 
         if (string.Equals(format, NumericFormat, StringComparison.Ordinal))
         {
-            return value >= 0;
+            return value >= 0 && value <= (maxPoints ?? 100);
         }
 
         return false;

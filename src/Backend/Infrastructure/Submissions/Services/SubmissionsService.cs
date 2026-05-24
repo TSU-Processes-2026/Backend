@@ -364,7 +364,7 @@ public class SubmissionsService : ISubmissionsService
 
         var requestByCriterionId = selfAssessments.ToDictionary(x => x.CriterionId);
 
-        return criteria.All(criterion => requestByCriterionId.TryGetValue(criterion.Id, out var result) && IsValidResultValue(criterion.Format, result.Value));
+        return criteria.All(criterion => requestByCriterionId.TryGetValue(criterion.Id, out var result) && IsValidResultValue(criterion.Format, result.Value, criterion.MaxPoints));
     }
 
     private static bool StoredSelfAssessmentsAreComplete(Submission submission, IReadOnlyList<Criterion> criteria)
@@ -437,7 +437,7 @@ public class SubmissionsService : ISubmissionsService
 
     private const string NumericFormat = "numeric";
 
-    private static bool IsValidResultValue(string format, decimal value)
+    private static bool IsValidResultValue(string format, decimal value, decimal? maxPoints = null)
     {
         if (string.Equals(format, "checklist", StringComparison.Ordinal))
         {
@@ -451,7 +451,7 @@ public class SubmissionsService : ISubmissionsService
 
         if (string.Equals(format, NumericFormat, StringComparison.Ordinal))
         {
-            return value >= 0;
+            return value >= 0 && value <= (maxPoints ?? 100);
         }
 
         return false;
