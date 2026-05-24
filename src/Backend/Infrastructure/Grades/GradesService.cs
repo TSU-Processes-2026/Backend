@@ -18,6 +18,7 @@ public class GradesService : IGradesService
     private const string InstructorAssessmentType = "INSTRUCTOR";
     private const string ChecklistFormat = "checklist";
     private const string PercentageFormat = "percentage";
+    private const string NumericFormat = "numeric";
 
     private readonly LmsDbContext _dbContext;
 
@@ -411,6 +412,12 @@ public class GradesService : IGradesService
         if (string.Equals(criterion.Format, PercentageFormat, StringComparison.Ordinal))
         {
             return Math.Clamp(result.Value.Value, 0, 100) / 100;
+        }
+
+        if (string.Equals(criterion.Format, NumericFormat, StringComparison.Ordinal))
+        {
+            var max = criterion.MaxPoints ?? 1;
+            return max > 0 ? Math.Clamp(result.Value.Value, 0, max) / max : 0;
         }
 
         return 0;

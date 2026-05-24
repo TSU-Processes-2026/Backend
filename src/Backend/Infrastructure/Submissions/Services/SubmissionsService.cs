@@ -352,6 +352,11 @@ public class SubmissionsService : ISubmissionsService
             return false;
         }
 
+        if (task.DeadLine.HasValue && DateTimeOffset.UtcNow < task.DeadLine.Value.AddDays(-1))
+        {
+            return false;
+        }
+
         if (selfAssessments is null || selfAssessments.Count == 0)
         {
             return criteria.Count == 0;
@@ -365,6 +370,11 @@ public class SubmissionsService : ISubmissionsService
     private static bool StoredSelfAssessmentsAreComplete(Submission submission, IReadOnlyList<Criterion> criteria)
     {
         if (submission.post.SelfAssessmentVisibilityDate.HasValue && DateTimeOffset.UtcNow < submission.post.SelfAssessmentVisibilityDate.Value)
+        {
+            return false;
+        }
+
+        if (submission.post.DeadLine.HasValue && DateTimeOffset.UtcNow < submission.post.DeadLine.Value.AddDays(-1))
         {
             return false;
         }
@@ -425,6 +435,8 @@ public class SubmissionsService : ISubmissionsService
         }
     }
 
+    private const string NumericFormat = "numeric";
+
     private static bool IsValidResultValue(string format, decimal value)
     {
         if (string.Equals(format, "checklist", StringComparison.Ordinal))
@@ -435,6 +447,11 @@ public class SubmissionsService : ISubmissionsService
         if (string.Equals(format, "percentage", StringComparison.Ordinal))
         {
             return value is 0 or 50 or 100;
+        }
+
+        if (string.Equals(format, NumericFormat, StringComparison.Ordinal))
+        {
+            return value >= 0;
         }
 
         return false;

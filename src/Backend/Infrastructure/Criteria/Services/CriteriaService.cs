@@ -14,6 +14,7 @@ public sealed class CriteriaService : ICriteriaService
     private const string AssignmentPostType = "Assignment";
     private const string ChecklistFormat = "checklist";
     private const string PercentageFormat = "percentage";
+    private const string NumericFormat = "numeric";
     private const string FivePointMode = "five_point";
     private const string CumulativeMode = "cumulative";
     private const string InstructorAssessmentType = "INSTRUCTOR";
@@ -47,10 +48,12 @@ public sealed class CriteriaService : ICriteriaService
 
         var isStudent = await IsStudentAsync(currentUserId, task.SubjectId, cancellationToken);
         var selfAssessmentEnabled = task.SelfAssessmentEnabled ?? task.Subject.SelfAssessmentEnabled;
-        var hidden = isStudent
-            && selfAssessmentEnabled
-            && task.SelfAssessmentVisibilityDate.HasValue
-            && _timeProvider.GetUtcNow() < task.SelfAssessmentVisibilityDate.Value;
+        var now = _timeProvider.GetUtcNow();
+        var beforeOneDay = selfAssessmentEnabled && task.DeadLine.HasValue && now < task.DeadLine.Value.AddDays(-1);
+        var hidden = isStudent && selfAssessmentEnabled && (
+            (task.SelfAssessmentVisibilityDate.HasValue && now < task.SelfAssessmentVisibilityDate.Value)
+            || beforeOneDay
+        );
 
         if (hidden)
         {
@@ -268,7 +271,7 @@ public sealed class CriteriaService : ICriteriaService
 
     private static bool IsValidCriterion(string gradingMode, string? format, decimal? weight, decimal? maxPoints)
     {
-        if (!string.Equals(format, ChecklistFormat, StringComparison.Ordinal) && !string.Equals(format, PercentageFormat, StringComparison.Ordinal))
+        if (!string.Equals(format, ChecklistFormat, StringComparison.Ordinal) && !string.Equals(format, PercentageFormat, StringComparison.Ordinal) && !string.Equals(format, NumericFormat, StringComparison.Ordinal))
         {
             return false;
         }
@@ -296,6 +299,11 @@ public sealed class CriteriaService : ICriteriaService
         if (string.Equals(format, PercentageFormat, StringComparison.Ordinal))
         {
             return value is 0 or 50 or 100;
+        }
+
+        if (string.Equals(format, NumericFormat, StringComparison.Ordinal))
+        {
+            return value >= 0;
         }
 
         return false;
