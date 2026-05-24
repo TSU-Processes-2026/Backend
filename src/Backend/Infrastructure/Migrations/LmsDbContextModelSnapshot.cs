@@ -273,118 +273,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("comments", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.CourseGrade", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CalculatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CourseId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("FinalGrade")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<decimal>("FinalScore")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CourseId");
-
-                    b.ToTable("course_grades", (string)null);
-                });
-
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.Criterion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Format")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsBonus")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPenalty")
-                        .HasColumnType("boolean");
-
-                    b.Property<decimal?>("MaxPoints")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("Points")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal?>("Weight")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaskId");
-
-                    b.ToTable("criteria", (string)null);
-                });
-
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.CriterionResult", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AssessmentType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("CriterionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SubmissionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("Submissionid")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal?>("Value")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CriterionId");
-
-                    b.HasIndex("SubmissionId");
-
-                    b.HasIndex("Submissionid");
-
-                    b.ToTable("criterion_results", (string)null);
-                });
-
             modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
                 {
                     b.Property<Guid>("SubjectId")
@@ -444,37 +332,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("grades", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.GradeScale", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Grade")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<decimal>("MaxScore")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<decimal>("MinScore")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("SubjectId1")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SubjectId");
-
-                    b.HasIndex("SubjectId1");
-
-                    b.ToTable("grade_scales", (string)null);
-                });
-
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -502,12 +359,6 @@ namespace Infrastructure.Migrations
                     b.Property<string>("PostType")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<bool>("SelfAssessmentEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset?>("SelfAssessmentVisibilityDate")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("StoragePath")
                         .HasColumnType("text");
@@ -572,10 +423,6 @@ namespace Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("GradingMode")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -1106,51 +953,6 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.CourseGrade", b =>
-                {
-                    b.HasOne("Infrastructure.Persistence.Entities.Subject", "Course")
-                        .WithMany()
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Course");
-                });
-
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.Criterion", b =>
-                {
-                    b.HasOne("Infrastructure.Persistence.Entities.Post", "Task")
-                        .WithMany()
-                        .HasForeignKey("TaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Task");
-                });
-
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.CriterionResult", b =>
-                {
-                    b.HasOne("Infrastructure.Persistence.Entities.Criterion", "Criterion")
-                        .WithMany()
-                        .HasForeignKey("CriterionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Infrastructure.Persistence.Entities.Submission", "Submission")
-                        .WithMany()
-                        .HasForeignKey("SubmissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Infrastructure.Persistence.Entities.Submission", null)
-                        .WithMany("CriterionResults")
-                        .HasForeignKey("Submissionid");
-
-                    b.Navigation("Criterion");
-
-                    b.Navigation("Submission");
-                });
-
             modelBuilder.Entity("Infrastructure.Persistence.Entities.DraftState", b =>
                 {
                     b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
@@ -1171,21 +973,6 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("submission");
-                });
-
-            modelBuilder.Entity("Infrastructure.Persistence.Entities.GradeScale", b =>
-                {
-                    b.HasOne("Infrastructure.Persistence.Entities.Subject", "Subject")
-                        .WithMany()
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Infrastructure.Persistence.Entities.Subject", null)
-                        .WithMany("GradeScales")
-                        .HasForeignKey("SubjectId1");
-
-                    b.Navigation("Subject");
                 });
 
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Post", b =>
@@ -1442,8 +1229,6 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Subject", b =>
                 {
-                    b.Navigation("GradeScales");
-
                     b.Navigation("Participants");
 
                     b.Navigation("Posts");
@@ -1451,8 +1236,6 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Persistence.Entities.Submission", b =>
                 {
-                    b.Navigation("CriterionResults");
-
                     b.Navigation("DecisionSession");
 
                     b.Navigation("TeamGrade");
