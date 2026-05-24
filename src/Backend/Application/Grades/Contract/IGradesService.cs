@@ -13,5 +13,7 @@ namespace Application.Grades.Contract
         Task<GradesAccessResult> DeleteGradeAsync(Guid submissionId, string teacherId);
         Task<CourseGradesListResult> GetCourseGradesAsync(Guid currentUserId, Guid courseId, CancellationToken cancellationToken);
         Task<CourseGradesCalculateResult> CalculateCourseGradesAsync(Guid currentUserId, Guid courseId, CancellationToken cancellationToken);
+        Task<GradeScaleAccessResult> GetGradeScaleAsync(Guid currentUserId, Guid courseId, CancellationToken cancellationToken);
+        Task<GradeScaleAccessResult> UpsertGradeScaleAsync(Guid currentUserId, Guid courseId, UpsertGradeScaleRequest request, CancellationToken cancellationToken);
     }
 }

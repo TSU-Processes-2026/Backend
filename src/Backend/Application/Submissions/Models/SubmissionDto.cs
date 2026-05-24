@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Serialization;
+using Application.Criteria.Models;
 
 namespace Application.Submissions.Models
 {
@@ -18,5 +19,6 @@ namespace Application.Submissions.Models
         public bool hasDecisionSession { get; set; }
         public bool isDecisionSessionClosed { get; set; }
         public bool isFinalTeamDecision { get; set; }
+        public List<CriterionResultResponse> criterionResults { get; set; } = new();
     }
 }

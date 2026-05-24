@@ -7,6 +7,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Api.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using System.Text;
 
 namespace Api.Controllers
 {
@@ -152,6 +153,93 @@ namespace Api.Controllers
             };
         }
 
+        [Authorize]
+        [HttpGet("api/courses/{id:guid}/grade-scale")]
+        [ProducesResponseType(typeof(IReadOnlyList<GradeScaleDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetGradeScale([FromRoute] Guid id, CancellationToken cancellationToken)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var result = await _gradesService.GetGradeScaleAsync(userId.Value, id, cancellationToken);
+
+            return result.Status switch
+            {
+                GradeScaleAccessStatus.Success => Ok(result.Scale),
+                GradeScaleAccessStatus.NotFound => NotFound(CreateNotFound()),
+                GradeScaleAccessStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+                _ => throw new InvalidOperationException("Unsupported grade scale get status.")
+            };
+        }
+
+        [Authorize]
+        [HttpPut("api/courses/{id:guid}/grade-scale")]
+        [ProducesResponseType(typeof(IReadOnlyList<GradeScaleDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpsertGradeScale([FromRoute] Guid id, [FromBody] UpsertGradeScaleRequest? request, CancellationToken cancellationToken)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var result = await _gradesService.UpsertGradeScaleAsync(userId.Value, id, request ?? new UpsertGradeScaleRequest(), cancellationToken);
+
+            return result.Status switch
+            {
+                GradeScaleAccessStatus.Success => Ok(result.Scale),
+                GradeScaleAccessStatus.NotFound => NotFound(CreateNotFound()),
+                GradeScaleAccessStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+                _ => throw new InvalidOperationException("Unsupported grade scale update status.")
+            };
+        }
+
+        [Authorize]
+        [HttpGet("api/courses/{id:guid}/grades/export")]
+        [Produces("text/csv")]
+        public async Task<IActionResult> ExportCourseGrades([FromRoute] Guid id, [FromQuery] string? format, CancellationToken cancellationToken)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var result = await _gradesService.GetCourseGradesAsync(userId.Value, id, cancellationToken);
+
+            if (result.Status == CourseGradesListStatus.NotFound)
+            {
+                return NotFound(CreateNotFound());
+            }
+
+            if (result.Status == CourseGradesListStatus.Forbidden)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, CreateForbidden());
+            }
+
+            var csv = new StringBuilder();
+            csv.AppendLine("StudentId,FinalScore,FinalGrade,CalculatedAt");
+
+            foreach (var grade in result.Grades)
+            {
+                csv.AppendLine($"{grade.StudentId},{grade.FinalScore},{EscapeCsv(grade.FinalGrade)},{grade.CalculatedAt:O}");
+            }
+
+            return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"course-{id}-grades.csv");
+        }
+
         private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateUnauthorized()
         {
             return new Microsoft.AspNetCore.Mvc.ProblemDetails
@@ -180,6 +268,16 @@ namespace Api.Controllers
                 Status = StatusCodes.Status404NotFound,
                 Detail = "Resource not found."
             };
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            if (!value.Contains(',') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
+            {
+                return value;
+            }
+
+            return $"\"{value.Replace("\"", "\"\"")}\"";
         }
     }
 }

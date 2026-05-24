@@ -79,6 +79,10 @@ public sealed class AssignmentsService : IAssignmentsService
             PostType = AssignmentPostType,
             Content = request.Content ?? string.Empty,
             AssignmentData = request.AssignmentData ?? string.Empty,
+            MaxPoints = request.MaxPoints,
+            SelfAssessmentEnabled = request.SelfAssessmentEnabled,
+            SelfAssessmentVisibilityDate = request.SelfAssessmentVisibilityDate,
+            DeadLine = request.DeadLine,
             CreatedAt = _timeProvider.GetUtcNow(),
             Subject = await _dbContext.Subjects.SingleAsync(x => x.Id == subjectId, cancellationToken),
             Questions = BuildQuestions(request.Questions)
@@ -109,6 +113,10 @@ public sealed class AssignmentsService : IAssignmentsService
 
         assignment.Content = request.Content ?? assignment.Content;
         assignment.AssignmentData = request.AssignmentData ?? assignment.AssignmentData ?? string.Empty;
+        assignment.MaxPoints = request.MaxPoints ?? assignment.MaxPoints;
+        assignment.SelfAssessmentEnabled = request.SelfAssessmentEnabled ?? assignment.SelfAssessmentEnabled;
+        assignment.SelfAssessmentVisibilityDate = request.SelfAssessmentVisibilityDate ?? assignment.SelfAssessmentVisibilityDate;
+        assignment.DeadLine = request.DeadLine ?? assignment.DeadLine;
 
         _dbContext.AssignmentQuestionOptions.RemoveRange(assignment.Questions.SelectMany(x => x.Options));
         _dbContext.AssignmentQuestions.RemoveRange(assignment.Questions);
@@ -196,6 +204,10 @@ public sealed class AssignmentsService : IAssignmentsService
             Content = assignment.Content,
             CreatedAt = assignment.CreatedAt,
             AssignmentData = assignment.AssignmentData ?? string.Empty,
+            MaxPoints = assignment.MaxPoints,
+            SelfAssessmentEnabled = assignment.SelfAssessmentEnabled,
+            SelfAssessmentVisibilityDate = assignment.SelfAssessmentVisibilityDate,
+            DeadLine = assignment.DeadLine,
             Questions = assignment.Questions
                 .OrderBy(x => x.Id)
                 .Select(x => new AssignmentQuestionResponse

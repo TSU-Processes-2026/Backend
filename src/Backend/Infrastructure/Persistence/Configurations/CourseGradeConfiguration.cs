@@ -25,6 +25,9 @@ public sealed class CourseGradeConfiguration : IEntityTypeConfiguration<CourseGr
         builder.Property(x => x.CalculatedAt)
             .IsRequired();
 
+        builder.HasIndex(x => new { x.CourseId, x.StudentId })
+            .IsUnique();
+
         builder.HasOne(x => x.Course)
             .WithMany()
             .HasForeignKey(x => x.CourseId)

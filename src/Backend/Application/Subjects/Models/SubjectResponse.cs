@@ -5,4 +5,7 @@ public sealed class SubjectResponse
     public required Guid Id { get; init; }
     public required string Title { get; init; }
     public required string Description { get; init; }
+    public required string GradingMode { get; init; }
+    public required bool SelfAssessmentEnabled { get; init; }
+    public Guid? FinalGradeScaleId { get; init; }
 }

@@ -15,10 +15,10 @@ public sealed class GradeScaleConfiguration : IEntityTypeConfiguration<GradeScal
         builder.Property(x => x.Id)
             .ValueGeneratedNever();
 
-        builder.Property(x => x.MinScore)
+        builder.Property(x => x.MinPoints)
             .HasColumnType("decimal(10,2)");
 
-        builder.Property(x => x.MaxScore)
+        builder.Property(x => x.MaxPoints)
             .HasColumnType("decimal(10,2)");
 
         builder.Property(x => x.Grade)
@@ -26,7 +26,7 @@ public sealed class GradeScaleConfiguration : IEntityTypeConfiguration<GradeScal
             .HasMaxLength(10);
 
         builder.HasOne(x => x.Subject)
-            .WithMany()
+            .WithMany(x => x.GradeScales)
             .HasForeignKey(x => x.SubjectId)
             .OnDelete(DeleteBehavior.Cascade);
     }

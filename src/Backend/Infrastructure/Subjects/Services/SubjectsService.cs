@@ -30,7 +30,9 @@ public sealed class SubjectsService : ISubjectsService
             Id = Guid.NewGuid(),
             Title = request.Title ?? string.Empty,
             Description = request.Description ?? string.Empty,
-            GradingMode = "five_point",
+            GradingMode = IsSupportedGradingMode(request.GradingMode) ? request.GradingMode! : "five_point",
+            SelfAssessmentEnabled = request.SelfAssessmentEnabled,
+            FinalGradeScaleId = request.FinalGradeScaleId,
             Participants = new List<SubjectParticipant>()
         };
 
@@ -64,7 +66,10 @@ public sealed class SubjectsService : ISubjectsService
             {
                 Id = x.Subject.Id,
                 Title = x.Subject.Title,
-                Description = x.Subject.Description
+                Description = x.Subject.Description,
+                GradingMode = x.Subject.GradingMode,
+                SelfAssessmentEnabled = x.Subject.SelfAssessmentEnabled,
+                FinalGradeScaleId = x.Subject.FinalGradeScaleId
             })
             .ToListAsync(cancellationToken);
     }
@@ -109,6 +114,9 @@ public sealed class SubjectsService : ISubjectsService
 
         subject.Title = request.Title ?? subject.Title;
         subject.Description = request.Description ?? subject.Description;
+        subject.GradingMode = IsSupportedGradingMode(request.GradingMode) ? request.GradingMode! : subject.GradingMode;
+        subject.SelfAssessmentEnabled = request.SelfAssessmentEnabled ?? subject.SelfAssessmentEnabled;
+        subject.FinalGradeScaleId = request.FinalGradeScaleId ?? subject.FinalGradeScaleId;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -339,13 +347,21 @@ public sealed class SubjectsService : ISubjectsService
         return string.Equals(role, StudentRole, StringComparison.Ordinal) || string.Equals(role, TeacherRole, StringComparison.Ordinal);
     }
 
+    private static bool IsSupportedGradingMode(string? gradingMode)
+    {
+        return string.Equals(gradingMode, "five_point", StringComparison.Ordinal) || string.Equals(gradingMode, "cumulative", StringComparison.Ordinal);
+    }
+
     private static SubjectResponse MapSubject(Subject subject)
     {
         return new SubjectResponse
         {
             Id = subject.Id,
             Title = subject.Title,
-            Description = subject.Description
+            Description = subject.Description,
+            GradingMode = subject.GradingMode,
+            SelfAssessmentEnabled = subject.SelfAssessmentEnabled,
+            FinalGradeScaleId = subject.FinalGradeScaleId
         };
     }
 

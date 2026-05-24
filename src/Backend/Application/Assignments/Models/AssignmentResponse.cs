@@ -9,5 +9,9 @@ public sealed class AssignmentResponse
     public required string Content { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required string AssignmentData { get; init; }
+    public decimal? MaxPoints { get; init; }
+    public bool? SelfAssessmentEnabled { get; init; }
+    public DateTimeOffset? SelfAssessmentVisibilityDate { get; init; }
+    public DateTimeOffset? DeadLine { get; init; }
     public required IReadOnlyList<AssignmentQuestionResponse> Questions { get; init; }
 }

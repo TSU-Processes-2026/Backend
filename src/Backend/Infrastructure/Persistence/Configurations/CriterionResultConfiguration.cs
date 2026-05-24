@@ -30,7 +30,7 @@ public sealed class CriterionResultConfiguration : IEntityTypeConfiguration<Crit
             .HasMaxLength(20);
 
         builder.HasOne(x => x.Submission)
-            .WithMany()
+            .WithMany(x => x.CriterionResults)
             .HasForeignKey(x => x.SubmissionId)
             .OnDelete(DeleteBehavior.Cascade);
 

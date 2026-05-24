@@ -28,6 +28,19 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(x => x.AssignmentData)
             .IsRequired(false);
 
+        builder.Property(x => x.MaxPoints)
+            .HasColumnType("decimal(10,2)")
+            .IsRequired(false);
+
+        builder.Property(x => x.SelfAssessmentEnabled)
+            .IsRequired(false);
+
+        builder.Property(x => x.SelfAssessmentVisibilityDate)
+            .IsRequired(false);
+
+        builder.Property(x => x.DeadLine)
+            .IsRequired(false);
+
         builder.HasOne(x => x.Subject)
             .WithMany(x => x.Posts)
             .HasForeignKey(x => x.SubjectId)
