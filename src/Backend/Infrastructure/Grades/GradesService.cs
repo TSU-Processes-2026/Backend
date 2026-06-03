@@ -19,6 +19,8 @@ public class GradesService : IGradesService
     private const string ChecklistFormat = "checklist";
     private const string PercentageFormat = "percentage";
     private const string NumericFormat = "numeric";
+    private const string BooleanValueType = "boolean";
+    private const string ScaleValueType = "scale";
 
     private readonly LmsDbContext _dbContext;
 
@@ -404,12 +406,12 @@ public class GradesService : IGradesService
             return 0;
         }
 
-        if (string.Equals(criterion.Format, ChecklistFormat, StringComparison.Ordinal))
+        if (string.Equals(criterion.Format, ChecklistFormat, StringComparison.Ordinal) || string.Equals(criterion.Format, BooleanValueType, StringComparison.Ordinal))
         {
             return result.Value.Value == 1 ? 1 : 0;
         }
 
-        if (string.Equals(criterion.Format, PercentageFormat, StringComparison.Ordinal))
+        if (string.Equals(criterion.Format, PercentageFormat, StringComparison.Ordinal) || string.Equals(criterion.Format, ScaleValueType, StringComparison.Ordinal))
         {
             return Math.Clamp(result.Value.Value, 0, 100) / 100;
         }
