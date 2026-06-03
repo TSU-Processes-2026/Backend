@@ -439,14 +439,14 @@ public class SubmissionsService : ISubmissionsService
 
     private static bool IsValidResultValue(string format, decimal value)
     {
-        if (string.Equals(format, "checklist", StringComparison.Ordinal))
+        if (string.Equals(format, "checklist", StringComparison.Ordinal) || string.Equals(format, "boolean", StringComparison.Ordinal))
         {
             return value is 0 or 1;
         }
 
-        if (string.Equals(format, "percentage", StringComparison.Ordinal))
+        if (string.Equals(format, "percentage", StringComparison.Ordinal) || string.Equals(format, "scale", StringComparison.Ordinal))
         {
-            return value is 0 or 50 or 100;
+            return value >= 0 && value <= 100;
         }
 
         if (string.Equals(format, NumericFormat, StringComparison.Ordinal))

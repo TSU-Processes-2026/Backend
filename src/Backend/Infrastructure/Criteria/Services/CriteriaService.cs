@@ -15,6 +15,13 @@ public sealed class CriteriaService : ICriteriaService
     private const string ChecklistFormat = "checklist";
     private const string PercentageFormat = "percentage";
     private const string NumericFormat = "numeric";
+    private const string BooleanValueType = "boolean";
+    private const string ScaleValueType = "scale";
+    private const string ActiveCriterionType = "active";
+    private const string PassiveCriterionType = "passive";
+    private const string StudentAppliesTo = "student";
+    private const string TeamAppliesTo = "team";
+    private const string BothAppliesTo = "both";
     private const string FivePointMode = "five_point";
     private const string CumulativeMode = "cumulative";
     private const string InstructorAssessmentType = "INSTRUCTOR";
@@ -87,7 +94,11 @@ public sealed class CriteriaService : ICriteriaService
             return CriterionUpdateResult.Forbidden();
         }
 
-        if (!IsValidCriterion(task.Subject.GradingMode, request.Format, request.Weight, request.MaxPoints))
+        var valueType = request.ValueType ?? request.Format;
+        var criterionType = request.CriterionType;
+        var appliesTo = request.AppliesTo ?? StudentAppliesTo;
+
+        if (!IsValidCriterion(task.Subject.GradingMode, valueType, criterionType, appliesTo, request.Title, request.Weight, request.MaxPoints, request.MinValue))
         {
             return CriterionUpdateResult.Forbidden();
         }
@@ -98,13 +109,19 @@ public sealed class CriteriaService : ICriteriaService
             Id = Guid.NewGuid(),
             TaskId = taskId,
             Task = task,
+            Title = request.Title!.Trim(),
             Description = request.Description ?? string.Empty,
-            Format = request.Format!,
+            CriterionType = criterionType!,
+            Format = valueType!,
             Weight = string.Equals(task.Subject.GradingMode, FivePointMode, StringComparison.Ordinal) ? request.Weight : null,
+            MinValue = request.MinValue,
             MaxPoints = string.Equals(task.Subject.GradingMode, CumulativeMode, StringComparison.Ordinal) ? request.MaxPoints : null,
             Points = request.Points,
             IsBonus = request.IsBonus,
             IsPenalty = request.IsPenalty,
+            IsRequired = request.IsRequired,
+            IsHiddenUntilVisibility = request.IsHiddenUntilVisibility,
+            AppliesTo = appliesTo,
             Order = order
         };
 
@@ -131,22 +148,32 @@ public sealed class CriteriaService : ICriteriaService
             return CriterionUpdateResult.Forbidden();
         }
 
-        var nextFormat = request.Format ?? criterion.Format;
+        var nextFormat = request.ValueType ?? request.Format ?? criterion.Format;
+        var nextCriterionType = request.CriterionType ?? criterion.CriterionType;
+        var nextAppliesTo = request.AppliesTo ?? criterion.AppliesTo;
+        var nextTitle = request.Title ?? criterion.Title;
         var nextWeight = request.Weight ?? criterion.Weight;
+        var nextMinValue = request.MinValue ?? criterion.MinValue;
         var nextMaxPoints = request.MaxPoints ?? criterion.MaxPoints;
 
-        if (!IsValidCriterion(criterion.Task.Subject.GradingMode, nextFormat, nextWeight, nextMaxPoints))
+        if (!IsValidCriterion(criterion.Task.Subject.GradingMode, nextFormat, nextCriterionType, nextAppliesTo, nextTitle, nextWeight, nextMaxPoints, nextMinValue))
         {
             return CriterionUpdateResult.Forbidden();
         }
 
+        criterion.Title = nextTitle.Trim();
         criterion.Description = request.Description ?? criterion.Description;
+        criterion.CriterionType = nextCriterionType;
         criterion.Format = nextFormat;
         criterion.Weight = string.Equals(criterion.Task.Subject.GradingMode, FivePointMode, StringComparison.Ordinal) ? nextWeight : null;
+        criterion.MinValue = nextMinValue;
         criterion.MaxPoints = string.Equals(criterion.Task.Subject.GradingMode, CumulativeMode, StringComparison.Ordinal) ? nextMaxPoints : null;
         criterion.Points = request.Points ?? criterion.Points;
         criterion.IsBonus = request.IsBonus ?? criterion.IsBonus;
         criterion.IsPenalty = request.IsPenalty ?? criterion.IsPenalty;
+        criterion.IsRequired = request.IsRequired ?? criterion.IsRequired;
+        criterion.IsHiddenUntilVisibility = request.IsHiddenUntilVisibility ?? criterion.IsHiddenUntilVisibility;
+        criterion.AppliesTo = nextAppliesTo;
         criterion.Order = request.Order ?? criterion.Order;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -269,9 +296,24 @@ public sealed class CriteriaService : ICriteriaService
                 cancellationToken);
     }
 
-    private static bool IsValidCriterion(string gradingMode, string? format, decimal? weight, decimal? maxPoints)
+    private static bool IsValidCriterion(string gradingMode, string? format, string? criterionType, string? appliesTo, string? title, decimal? weight, decimal? maxPoints, decimal? minValue)
     {
-        if (!string.Equals(format, ChecklistFormat, StringComparison.Ordinal) && !string.Equals(format, PercentageFormat, StringComparison.Ordinal) && !string.Equals(format, NumericFormat, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        if (!IsValidCriterionType(criterionType) || !IsValidAppliesTo(appliesTo) || !IsValidValueType(format))
+        {
+            return false;
+        }
+
+        if (minValue.HasValue && minValue.Value < 0)
+        {
+            return false;
+        }
+
+        if (minValue.HasValue && maxPoints.HasValue && minValue.Value > maxPoints.Value)
         {
             return false;
         }
@@ -289,16 +331,38 @@ public sealed class CriteriaService : ICriteriaService
         return false;
     }
 
+    private static bool IsValidCriterionType(string? criterionType)
+    {
+        return string.Equals(criterionType, ActiveCriterionType, StringComparison.Ordinal)
+               || string.Equals(criterionType, PassiveCriterionType, StringComparison.Ordinal);
+    }
+
+    private static bool IsValidAppliesTo(string? appliesTo)
+    {
+        return string.Equals(appliesTo, StudentAppliesTo, StringComparison.Ordinal)
+               || string.Equals(appliesTo, TeamAppliesTo, StringComparison.Ordinal)
+               || string.Equals(appliesTo, BothAppliesTo, StringComparison.Ordinal);
+    }
+
+    private static bool IsValidValueType(string? format)
+    {
+        return string.Equals(format, BooleanValueType, StringComparison.Ordinal)
+               || string.Equals(format, ScaleValueType, StringComparison.Ordinal)
+               || string.Equals(format, NumericFormat, StringComparison.Ordinal)
+               || string.Equals(format, ChecklistFormat, StringComparison.Ordinal)
+               || string.Equals(format, PercentageFormat, StringComparison.Ordinal);
+    }
+
     private static bool IsValidResultValue(string format, decimal value)
     {
-        if (string.Equals(format, ChecklistFormat, StringComparison.Ordinal))
+        if (string.Equals(format, ChecklistFormat, StringComparison.Ordinal) || string.Equals(format, BooleanValueType, StringComparison.Ordinal))
         {
             return value is 0 or 1;
         }
 
-        if (string.Equals(format, PercentageFormat, StringComparison.Ordinal))
+        if (string.Equals(format, PercentageFormat, StringComparison.Ordinal) || string.Equals(format, ScaleValueType, StringComparison.Ordinal))
         {
-            return value is 0 or 50 or 100;
+            return value >= 0 && value <= 100;
         }
 
         if (string.Equals(format, NumericFormat, StringComparison.Ordinal))
@@ -315,13 +379,20 @@ public sealed class CriteriaService : ICriteriaService
         {
             Id = criterion.Id,
             TaskId = criterion.TaskId,
+            Title = criterion.Title,
             Description = criterion.Description,
+            CriterionType = criterion.CriterionType,
+            ValueType = criterion.Format,
             Format = criterion.Format,
             Weight = criterion.Weight,
+            MinValue = criterion.MinValue,
             MaxPoints = criterion.MaxPoints,
             Points = criterion.Points,
             IsBonus = criterion.IsBonus,
             IsPenalty = criterion.IsPenalty,
+            IsRequired = criterion.IsRequired,
+            IsHiddenUntilVisibility = criterion.IsHiddenUntilVisibility,
+            AppliesTo = criterion.AppliesTo,
             Order = criterion.Order
         };
     }

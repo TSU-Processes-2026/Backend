@@ -403,6 +403,74 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AnswerItem' }
 
+    Criterion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        criterionType: { type: string, enum: [active, passive] }
+        valueType: { type: string, enum: [boolean, scale, numeric, checklist, percentage] }
+        format: { type: string, enum: [boolean, scale, numeric, checklist, percentage] }
+        weight: { type: number, format: decimal, nullable: true }
+        minValue: { type: number, format: decimal, nullable: true }
+        maxPoints: { type: number, format: decimal, nullable: true }
+        points: { type: number, format: decimal, nullable: true }
+        isBonus: { type: boolean }
+        isPenalty: { type: boolean }
+        isRequired: { type: boolean }
+        isHiddenUntilVisibility: { type: boolean }
+        appliesTo: { type: string, enum: [student, team, both] }
+        order: { type: integer }
+
+    CriterionList:
+      type: object
+      properties:
+        hidden: { type: boolean }
+        criteria:
+          type: array
+          items: { $ref: '#/components/schemas/Criterion' }
+
+    CreateCriterionRequest:
+      type: object
+      required: [title, criterionType, valueType]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        criterionType: { type: string, enum: [active, passive] }
+        valueType: { type: string, enum: [boolean, scale, numeric, checklist, percentage] }
+        format: { type: string, enum: [boolean, scale, numeric, checklist, percentage], nullable: true }
+        weight: { type: number, format: decimal, nullable: true }
+        minValue: { type: number, format: decimal, nullable: true }
+        maxPoints: { type: number, format: decimal, nullable: true }
+        points: { type: number, format: decimal, nullable: true }
+        isBonus: { type: boolean, default: false }
+        isPenalty: { type: boolean, default: false }
+        isRequired: { type: boolean, default: true }
+        isHiddenUntilVisibility: { type: boolean, default: false }
+        appliesTo: { type: string, enum: [student, team, both], default: student }
+        order: { type: integer, nullable: true }
+
+    UpdateCriterionRequest:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        criterionType: { type: string, enum: [active, passive] }
+        valueType: { type: string, enum: [boolean, scale, numeric, checklist, percentage] }
+        format: { type: string, enum: [boolean, scale, numeric, checklist, percentage] }
+        weight: { type: number, format: decimal, nullable: true }
+        minValue: { type: number, format: decimal, nullable: true }
+        maxPoints: { type: number, format: decimal, nullable: true }
+        points: { type: number, format: decimal, nullable: true }
+        isBonus: { type: boolean }
+        isPenalty: { type: boolean }
+        isRequired: { type: boolean }
+        isHiddenUntilVisibility: { type: boolean }
+        appliesTo: { type: string, enum: [student, team, both] }
+        order: { type: integer }
+
     Grade:
       type: object
       properties:
@@ -1719,6 +1787,110 @@ paths:
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
         '403':
           description: Forbidden. Только автор. Решение уже оценено.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # CRITERIA
+  # ==========================================
+  /tasks/{taskId}/criteria:
+    get:
+      tags: [Criteria]
+      summary: Get assignment criteria
+      description: Returns active and passive grading criteria for an assignment task. Students may receive an empty list while criteria are hidden by visibility settings.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/CriterionList' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Requester is not a subject participant.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Assignment task does not exist.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Criteria]
+      summary: Create assignment criterion
+      description: Creates an active or passive grading criterion for an assignment. Only Teacher/Admin participants may create criteria.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCriterionRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Criterion' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Requester is not a Teacher/Admin participant or request is invalid for the subject grading mode.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Assignment task does not exist.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /criteria/{id}:
+    patch:
+      tags: [Criteria]
+      summary: Update assignment criterion
+      description: Updates an active or passive grading criterion. Only Teacher/Admin participants may update criteria.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCriterionRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Criterion' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Requester is not a Teacher/Admin participant or request is invalid for the subject grading mode.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Criterion does not exist.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Criteria]
+      summary: Delete assignment criterion
+      description: Deletes an assignment grading criterion. Only Teacher/Admin participants may delete criteria.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Requester is not a Teacher/Admin participant.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Criterion does not exist.
           content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
 
   # ==========================================
