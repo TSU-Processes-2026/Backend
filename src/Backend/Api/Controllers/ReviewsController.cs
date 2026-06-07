@@ -29,6 +29,60 @@ public sealed class ReviewsController : ControllerBase
         return Ok(reviews);
     }
 
+    [Authorize]
+    [HttpPost("reviews/{id:guid}/start")]
+    [ProducesResponseType(typeof(ReviewAssignmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> StartReview([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var result = await _reviewsService.StartReviewAsync(userId.Value, id, cancellationToken);
+        if (result is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpPost("reviews/{id:guid}/save-draft")]
+    [ProducesResponseType(typeof(ReviewAssignmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveDraft([FromRoute] Guid id, [FromBody] SaveDraftRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var result = await _reviewsService.SaveDraftAsync(userId.Value, id, request, cancellationToken);
+        if (result is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpPost("reviews/{id:guid}/submit")]
+    [ProducesResponseType(typeof(ReviewAssignmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SubmitReview([FromRoute] Guid id, [FromBody] SubmitReviewRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var result = await _reviewsService.SubmitReviewAsync(userId.Value, id, request, cancellationToken);
+        if (result is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(result);
+    }
+
     private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateUnauthorized()
     {
         return new Microsoft.AspNetCore.Mvc.ProblemDetails
@@ -36,6 +90,16 @@ public sealed class ReviewsController : ControllerBase
             Title = "Unauthorized",
             Status = StatusCodes.Status401Unauthorized,
             Detail = "Authentication failed."
+        };
+    }
+
+    private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateNotFound()
+    {
+        return new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Title = "Not Found",
+            Status = StatusCodes.Status404NotFound,
+            Detail = "Review assignment not found."
         };
     }
 }

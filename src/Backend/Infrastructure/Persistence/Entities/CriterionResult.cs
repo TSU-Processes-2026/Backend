@@ -9,6 +9,11 @@ public sealed class CriterionResult
     public string? Comment { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
     public string AssessmentType { get; set; } = string.Empty;
+    
+    public Guid? ReviewId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    
     public Submission Submission { get; set; } = null!;
     public Criterion Criterion { get; set; } = null!;
+    public Review? Review { get; set; }
 }
