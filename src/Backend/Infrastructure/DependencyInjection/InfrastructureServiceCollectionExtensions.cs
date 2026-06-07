@@ -9,6 +9,7 @@ using Application.Subjects.Contracts;
 using Application.Submissions.Contracts;
 using Application.Teams.Contracts;
 using Application.Users.Contracts;
+using Application.Reviews.Contracts;
 using Infrastructure.Assignments.Services;
 using Infrastructure.Auth.Services;
 using Infrastructure.Criteria.Services;
@@ -25,6 +26,7 @@ using Infrastructure.Subjects.Services;
 using Infrastructure.Submissions.Services;
 using Infrastructure.Teams.Services;
 using Infrastructure.Users.Services;
+using Infrastructure.Reviews.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -87,6 +89,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ICaptainSelectionService, CaptainSelectionService>();
         services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
         services.AddScoped<IUsersService, UsersService>();
+        services.AddScoped<IReviewsService, ReviewsService>();
 
         services.AddHostedService<ExpiredSessionsCleanupService>();
 
