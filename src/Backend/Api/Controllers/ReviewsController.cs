@@ -30,6 +30,61 @@ public sealed class ReviewsController : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("submissions/{id:guid}/reviews")]
+    [ProducesResponseType(typeof(SubmissionReviewsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSubmissionReviews([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var reviews = await _reviewsService.GetSubmissionReviewsAsync(id, cancellationToken);
+        if (reviews is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(reviews);
+    }
+
+    [Authorize]
+    [HttpGet("submissions/{id:guid}/final-grade")]
+    [ProducesResponseType(typeof(FinalGradeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetFinalGrade([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var finalGrade = await _reviewsService.GetFinalGradeAsync(id, cancellationToken);
+        if (finalGrade is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(finalGrade);
+    }
+
+    [Authorize]
+    [HttpPost("submissions/{id:guid}/teacher-review")]
+    [ProducesResponseType(typeof(ReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateTeacherReview([FromRoute] Guid id, [FromBody] TeacherReviewRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId is null)
+            return Unauthorized(CreateUnauthorized());
+
+        var review = await _reviewsService.CreateTeacherReviewAsync(userId.Value, id, request, cancellationToken);
+        if (review is null)
+            return NotFound(CreateNotFound());
+
+        return Ok(review);
+    }
+
+    [Authorize]
     [HttpPost("reviews/{id:guid}/start")]
     [ProducesResponseType(typeof(ReviewAssignmentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]

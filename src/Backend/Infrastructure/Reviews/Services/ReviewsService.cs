@@ -209,6 +209,165 @@ public sealed class ReviewsService : IReviewsService
         return MapToDto(assignment);
     }
 
+    public async Task<SubmissionReviewsDto?> GetSubmissionReviewsAsync(Guid submissionId, CancellationToken cancellationToken)
+    {
+        var reviews = await _dbContext.Reviews
+            .Include(r => r.CriterionResults)
+            .Include(r => r.Assignment)
+                .ThenInclude(a => a.Task)
+                    .ThenInclude(t => t.Subject)
+            .Where(r => r.Assignment.SubmissionId == submissionId)
+            .OrderByDescending(r => r.SubmittedAt)
+            .ToListAsync(cancellationToken);
+
+        if (reviews.Count == 0)
+            return null;
+
+        var peerReviews = reviews
+            .Where(r => r.Source == "peer")
+            .Select(MapReviewToDto)
+            .ToList();
+
+        var teacherReview = reviews
+            .FirstOrDefault(r => r.Source == "teacher");
+
+        return new SubmissionReviewsDto
+        {
+            SubmissionId = submissionId,
+            PeerReviews = peerReviews,
+            TeacherReview = teacherReview != null ? MapReviewToDto(teacherReview) : null
+        };
+    }
+
+    public async Task<FinalGradeDto?> GetFinalGradeAsync(Guid submissionId, CancellationToken cancellationToken)
+    {
+        var reviews = await _dbContext.Reviews
+            .Include(r => r.Assignment)
+            .Where(r => r.Assignment.SubmissionId == submissionId && r.IsFinal)
+            .ToListAsync(cancellationToken);
+
+        if (reviews.Count == 0)
+            return null;
+
+        var teacherReview = reviews.FirstOrDefault(r => r.Source == "teacher");
+        var peerReviews = reviews.Where(r => r.Source == "peer").ToList();
+
+        decimal? finalScore;
+        string finalSource;
+
+        if (teacherReview != null)
+        {
+            finalScore = teacherReview.OverallScore;
+            finalSource = "teacher";
+        }
+        else if (peerReviews.Count > 0)
+        {
+            finalScore = peerReviews.Average(r => r.OverallScore);
+            finalSource = "peer";
+        }
+        else
+        {
+            return null;
+        }
+
+        return new FinalGradeDto
+        {
+            SubmissionId = submissionId,
+            FinalScore = finalScore,
+            FinalSource = finalSource,
+            CalculatedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    public async Task<ReviewDto?> CreateTeacherReviewAsync(Guid teacherId, Guid submissionId, TeacherReviewRequest request, CancellationToken cancellationToken)
+    {
+        var assignment = await _dbContext.ReviewAssignments
+            .FirstOrDefaultAsync(a => a.SubmissionId == submissionId, cancellationToken);
+
+        if (assignment is null)
+            return null;
+
+        var existingTeacherReview = await _dbContext.Reviews
+            .Include(r => r.CriterionResults)
+            .FirstOrDefaultAsync(r => r.Assignment.SubmissionId == submissionId && r.Source == "teacher", cancellationToken);
+
+        if (existingTeacherReview != null)
+        {
+            existingTeacherReview.OverallScore = request.OverallScore;
+            existingTeacherReview.OverallComment = request.OverallComment;
+            existingTeacherReview.SubmittedAt = DateTimeOffset.UtcNow;
+            existingTeacherReview.IsFinal = true;
+
+            if (request.CriterionResults != null)
+            {
+                foreach (var criterionResultDto in request.CriterionResults)
+                {
+                    var existingCriterionResult = existingTeacherReview.CriterionResults
+                        .FirstOrDefault(cr => cr.CriterionId == criterionResultDto.CriterionId);
+
+                    if (existingCriterionResult is null)
+                    {
+                        existingCriterionResult = new CriterionResult
+                        {
+                            Id = Guid.NewGuid(),
+                            ReviewId = existingTeacherReview.Id,
+                            CriterionId = criterionResultDto.CriterionId,
+                            Value = criterionResultDto.Value,
+                            Comment = criterionResultDto.Comment,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        };
+                        _dbContext.CriterionResults.Add(existingCriterionResult);
+                    }
+                    else
+                    {
+                        existingCriterionResult.Value = criterionResultDto.Value;
+                        existingCriterionResult.Comment = criterionResultDto.Comment;
+                    }
+                }
+            }
+        }
+        else
+        {
+            var newReview = new Review
+            {
+                Id = Guid.NewGuid(),
+                AssignmentId = assignment.Id,
+                ReviewerUserId = teacherId,
+                Source = "teacher",
+                OverallScore = request.OverallScore,
+                OverallComment = request.OverallComment,
+                SubmittedAt = DateTimeOffset.UtcNow,
+                IsFinal = true,
+                IsRejected = false,
+                ReplacedByTeacher = false
+            };
+            _dbContext.Reviews.Add(newReview);
+
+            if (request.CriterionResults != null)
+            {
+                foreach (var criterionResultDto in request.CriterionResults)
+                {
+                    var criterionResult = new CriterionResult
+                    {
+                        Id = Guid.NewGuid(),
+                        ReviewId = newReview.Id,
+                        CriterionId = criterionResultDto.CriterionId,
+                        Value = criterionResultDto.Value,
+                        Comment = criterionResultDto.Comment,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    _dbContext.CriterionResults.Add(criterionResult);
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return MapReviewToDto(newReview);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return MapReviewToDto(existingTeacherReview);
+    }
+
     private static ReviewAssignmentDto MapToDto(ReviewAssignment assignment)
     {
         var latestReview = assignment.Reviews
