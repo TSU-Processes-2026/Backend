@@ -1870,6 +1870,42 @@ public sealed class TeamsService : ITeamsService
         });
     }
 
+    public async Task<TeamMutationResult> AssignRepresentativeAsync(Guid currentUserId, Guid teamId, AssignRepresentativeRequest request, CancellationToken cancellationToken)
+    {
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .FirstOrDefaultAsync(x => x.Id == teamId, cancellationToken);
+
+        if (team is null)
+            return TeamMutationResult.NotFound();
+
+        var isTeacherOrAdmin = await IsTeacherOrAdminAsync(currentUserId, team.SubjectId, cancellationToken);
+        var isTeamMember = team.Members.Any(m => m.UserId == currentUserId);
+
+        if (!isTeacherOrAdmin && !isTeamMember)
+            return TeamMutationResult.Forbidden();
+
+        var representativeMember = team.Members.FirstOrDefault(m => m.UserId == request.RepresentativeUserId);
+        if (representativeMember is null)
+            return TeamMutationResult.Invalid(new List<string> { "Representative must be a team member" });
+
+        team.RepresentativeUserId = request.RepresentativeUserId;
+        team.RepresentativeAssignedAt = _timeProvider.GetUtcNow();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var resultTeams = await LoadTeamsAsync(team.SubjectId, cancellationToken);
+        var resultUsernames = await LoadUsernamesAsync(
+            resultTeams.SelectMany(t => t.Members.Select(m => m.UserId)),
+            cancellationToken);
+
+        return TeamMutationResult.Success(new TeamDistributionResponse
+        {
+            Teams = resultTeams.Select(t => MapTeam(t, resultUsernames)).ToList(),
+            Warnings = Array.Empty<string>()
+        });
+    }
+
     private async Task<bool> IsStudentAsync(Guid userId, Guid subjectId, CancellationToken cancellationToken)
     {
         return await _dbContext.SubjectParticipants

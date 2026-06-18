@@ -478,6 +478,36 @@ public sealed class TeamsController : ControllerBase
         };
     }
 
+    [HttpPost("teams/{teamId:guid}/assign-representative")]
+    [ProducesResponseType(typeof(TeamDistributionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AssignRepresentative(
+        [FromRoute] Guid teamId,
+        [FromBody] AssignRepresentativeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _teamsService.AssignRepresentativeAsync(userId.Value, teamId, request, cancellationToken);
+
+        return result.Status switch
+        {
+            TeamMutationStatus.Success => Ok(result.Response),
+            TeamMutationStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            TeamMutationStatus.Invalid => BadRequest(CreateBadRequest(result.Errors)),
+            TeamMutationStatus.NotFound => NotFound(CreateNotFound()),
+            _ => throw new InvalidOperationException("Unsupported team mutation status.")
+        };
+    }
+
     private static ProblemDetails CreateUnauthorized()
     {
         return new ProblemDetails
@@ -505,6 +535,16 @@ public sealed class TeamsController : ControllerBase
             Title = "Bad Request",
             Status = StatusCodes.Status400BadRequest,
             Detail = errors.Count == 0 ? "Validation failed." : string.Join("; ", errors)
+        };
+    }
+
+    private static ProblemDetails CreateNotFound()
+    {
+        return new ProblemDetails
+        {
+            Title = "Not Found",
+            Status = StatusCodes.Status404NotFound,
+            Detail = "Team not found."
         };
     }
 }

@@ -36,6 +36,12 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.CaptainSelectedAt)
             .IsRequired(false);
 
+        builder.Property(x => x.RepresentativeUserId)
+            .IsRequired(false);
+
+        builder.Property(x => x.RepresentativeAssignedAt)
+            .IsRequired(false);
+
         builder.HasOne(x => x.Subject)
             .WithMany()
             .HasForeignKey(x => x.SubjectId)
@@ -44,6 +50,11 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.HasOne(x => x.Captain)
             .WithMany()
             .HasForeignKey(x => x.CaptainUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(x => x.Representative)
+            .WithMany()
+            .HasForeignKey(x => x.RepresentativeUserId)
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasMany(x => x.Members)
