@@ -3,10 +3,15 @@ using Application.Grades.Models;
 using Application.Submissions.Models;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Api.Authentication;
+using Infrastructure.Persistence;
+using Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 
 namespace Api.Controllers
@@ -15,10 +20,14 @@ namespace Api.Controllers
     public class GradesController : ControllerBase
     {
         private readonly IGradesService _gradesService;
+        private readonly IGradeCalculationService _gradeCalculationService;
+        private readonly LmsDbContext _dbContext;
 
-        public GradesController(IGradesService gradesService)
+        public GradesController(IGradesService gradesService, IGradeCalculationService gradeCalculationService, LmsDbContext dbContext)
         {
             _gradesService = gradesService;
+            _gradeCalculationService = gradeCalculationService;
+            _dbContext = dbContext;
         }
 
         [HttpGet("api/submissions/{submissionId}/grade")]
@@ -142,6 +151,8 @@ namespace Api.Controllers
                 return Unauthorized(CreateUnauthorized());
             }
 
+            await _gradeCalculationService.CalculateCourseGradesAsync(id, cancellationToken);
+
             var result = await _gradesService.CalculateCourseGradesAsync(userId.Value, id, cancellationToken);
 
             return result.Status switch
@@ -206,6 +217,36 @@ namespace Api.Controllers
         }
 
         [Authorize]
+        [HttpGet("api/courses/{courseId:guid}/analytics")]
+        [ProducesResponseType(typeof(CourseAnalyticsResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetCourseAnalytics([FromRoute] Guid courseId, CancellationToken ct)
+        {
+            var userId = User.GetUserId();
+
+            if (userId is null)
+            {
+                return Unauthorized(CreateUnauthorized());
+            }
+
+            var isTeacherOrAdmin = await _dbContext.SubjectParticipants
+                .AnyAsync(x => x.SubjectId == courseId && x.UserId == userId.Value
+                    && (x.Role == "Teacher" || x.Role == "Admin"), ct);
+
+            if (!isTeacherOrAdmin)
+                return Forbid();
+
+            var courseExists = await _dbContext.Subjects.AnyAsync(x => x.Id == courseId, ct);
+            if (!courseExists)
+                return NotFound(CreateNotFound());
+
+            var analytics = await BuildAnalyticsAsync(courseId, ct);
+            return Ok(analytics);
+        }
+
+        [Authorize]
         [HttpGet("api/courses/{id:guid}/grades/export")]
         [Produces("text/csv")]
         public async Task<IActionResult> ExportCourseGrades([FromRoute] Guid id, [FromQuery] string? format, CancellationToken cancellationToken)
@@ -217,27 +258,102 @@ namespace Api.Controllers
                 return Unauthorized(CreateUnauthorized());
             }
 
-            var result = await _gradesService.GetCourseGradesAsync(userId.Value, id, cancellationToken);
+            var isTeacherOrAdmin = await _dbContext.SubjectParticipants
+                .AnyAsync(x => x.SubjectId == id && x.UserId == userId.Value
+                    && (x.Role == "Teacher" || x.Role == "Admin"), cancellationToken);
 
-            if (result.Status == CourseGradesListStatus.NotFound)
+            if (!isTeacherOrAdmin)
+                return Forbid();
+
+            var analytics = await BuildAnalyticsAsync(id, cancellationToken);
+
+            var sb = new StringBuilder();
+            sb.Append("Student");
+            foreach (var title in analytics.TaskTitles)
             {
-                return NotFound(CreateNotFound());
+                sb.Append($",{EscapeCsv(title)} (Score),{EscapeCsv(title)} (Source),{EscapeCsv(title)} (Reviewers)");
+            }
+            sb.AppendLine(",Final Course Grade");
+
+            foreach (var row in analytics.Rows)
+            {
+                sb.Append(EscapeCsv(row.StudentName));
+                foreach (var cell in row.TaskGrades)
+                {
+                    sb.Append($",{cell.Score},{cell.Source ?? "-"},{cell.ReviewerCount}");
+                }
+                sb.AppendLine($",{row.FinalCourseGrade}");
             }
 
-            if (result.Status == CourseGradesListStatus.Forbidden)
+            return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", $"grades-{id}.csv");
+        }
+
+        private async Task<CourseAnalyticsResponse> BuildAnalyticsAsync(Guid courseId, CancellationToken ct)
+        {
+            var tasks = await _dbContext.Posts
+                .Where(x => x.SubjectId == courseId && x.PostType == "Assignment")
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync(ct);
+
+            var submissions = await _dbContext.Submissions
+                .Include(x => x.post)
+                .Where(x => x.post.SubjectId == courseId)
+                .ToListAsync(ct);
+
+            var studentUserIds = submissions.Select(x => x.authorId).Distinct().ToList();
+            var users = await _dbContext.Users
+                .Where(u => studentUserIds.Contains(u.Id))
+                .ToListAsync(ct);
+            var userNames = users.ToDictionary(u => u.Id, u => u.UserName ?? u.Email ?? u.Id.ToString());
+
+            var submissionsByAuthor = submissions.GroupBy(x => x.authorId).ToList();
+
+            var courseGrades = await _dbContext.CourseGrades
+                .Where(x => x.CourseId == courseId)
+                .ToListAsync(ct);
+
+            var result = new CourseAnalyticsResponse
             {
-                return StatusCode(StatusCodes.Status403Forbidden, CreateForbidden());
+                CourseId = courseId,
+                TaskTitles = tasks.Select(t => t.Content).ToList()
+            };
+
+            foreach (var group in submissionsByAuthor)
+            {
+                var studentId = group.Key;
+                var userName = userNames.GetValueOrDefault(studentId, studentId.ToString());
+
+                var row = new StudentAnalyticsRow
+                {
+                    StudentId = studentId,
+                    StudentName = userName
+                };
+
+                foreach (var task in tasks)
+                {
+                    var sub = group.FirstOrDefault(x => x.assignmentId == task.Id);
+                    var reviewCount = sub is not null
+                        ? await _dbContext.ReviewAssignments
+                            .CountAsync(x => x.SubmissionId == sub.id && x.Status == "submitted", ct)
+                        : 0;
+
+                    row.TaskGrades.Add(new TaskGradeCell
+                    {
+                        TaskId = task.Id,
+                        TaskTitle = task.Content,
+                        Score = sub?.FinalScore,
+                        Source = sub?.FinalSource,
+                        ReviewerCount = reviewCount
+                    });
+                }
+
+                var courseGrade = courseGrades.FirstOrDefault(x => x.StudentId == studentId);
+                row.FinalCourseGrade = courseGrade?.FinalScore;
+
+                result.Rows.Add(row);
             }
 
-            var csv = new StringBuilder();
-            csv.AppendLine("StudentId,FinalScore,FinalGrade,CalculatedAt");
-
-            foreach (var grade in result.Grades)
-            {
-                csv.AppendLine($"{grade.StudentId},{grade.FinalScore},{EscapeCsv(grade.FinalGrade)},{grade.CalculatedAt:O}");
-            }
-
-            return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"course-{id}-grades.csv");
+            return result;
         }
 
         private static Microsoft.AspNetCore.Mvc.ProblemDetails CreateUnauthorized()
