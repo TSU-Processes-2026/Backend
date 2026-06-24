@@ -22,4 +22,5 @@ public interface ITeamsService
     Task<StudentJoinTeamResult> StudentJoinTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken);
     Task<StudentLeaveTeamResult> StudentLeaveTeamAsync(Guid currentUserId, Guid subjectId, Guid teamId, CancellationToken cancellationToken);
     Task<TeamMutationResult> AssignRepresentativeAsync(Guid currentUserId, Guid teamId, AssignRepresentativeRequest request, CancellationToken cancellationToken);
+    Task<bool> CanMemberReviewAsync(Guid userId, Guid teamId, string policy, CancellationToken ct);
 }

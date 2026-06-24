@@ -1906,6 +1906,23 @@ public sealed class TeamsService : ITeamsService
         });
     }
 
+    public async Task<bool> CanMemberReviewAsync(Guid userId, Guid teamId, string policy, CancellationToken ct)
+    {
+        var team = await _dbContext.Teams
+            .Include(x => x.Members)
+            .SingleOrDefaultAsync(x => x.Id == teamId, ct);
+
+        if (team is null) return false;
+
+        return policy switch
+        {
+            "captain_only" => team.CaptainUserId == userId,
+            "one_representative_reviews" => team.RepresentativeUserId == userId || team.CaptainUserId == userId,
+            "all_members" => team.Members.Any(m => m.UserId == userId),
+            _ => false
+        };
+    }
+
     private async Task<bool> IsStudentAsync(Guid userId, Guid subjectId, CancellationToken cancellationToken)
     {
         return await _dbContext.SubjectParticipants
