@@ -154,6 +154,15 @@ public sealed class PostsService : IPostsService
             return PostUpdateResult.Forbidden();
         }
 
+        // Validate: review deadline must not be earlier than task deadline (spec §12.6)
+        var effectiveReviewDeadline = request.ReviewDeadlineAt ?? post.ReviewDeadlineAt;
+        var effectiveTaskDeadline = post.DeadLine;
+        if (effectiveReviewDeadline.HasValue && effectiveTaskDeadline.HasValue
+            && effectiveReviewDeadline.Value < effectiveTaskDeadline.Value)
+        {
+            return PostUpdateResult.Forbidden();
+        }
+
         post.Content = request.Content ?? post.Content;
         post.ReviewEnabled = request.ReviewEnabled ?? post.ReviewEnabled;
         post.ReviewType = request.ReviewType ?? post.ReviewType;

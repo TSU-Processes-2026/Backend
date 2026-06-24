@@ -91,6 +91,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ISubmissionDecisionService, SubmissionDecisionService>();
         services.AddScoped<IUsersService, UsersService>();
         services.AddScoped<IReviewsService, ReviewsService>();
+        services.AddScoped<IReviewDistributionService, ReviewDistributionService>();
+        services.AddScoped<IGradeCalculationService, GradeCalculationService>();
 
         services.AddHostedService<ExpiredSessionsCleanupService>();
 
