@@ -26,6 +26,7 @@ dist-ssr/
 [Dd]ebug/
 [Rr]elease/
 x64/
+.dotnet_cli_home/
 
 ### =========================
 ### Visual Studio / Rider

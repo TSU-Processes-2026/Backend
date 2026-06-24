@@ -29,6 +29,9 @@ public sealed class CriterionResultConfiguration : IEntityTypeConfiguration<Crit
             .IsRequired()
             .HasMaxLength(20);
 
+        builder.Property(x => x.CreatedAt)
+            .IsRequired();
+
         builder.HasOne(x => x.Submission)
             .WithMany(x => x.CriterionResults)
             .HasForeignKey(x => x.SubmissionId)
@@ -37,6 +40,11 @@ public sealed class CriterionResultConfiguration : IEntityTypeConfiguration<Crit
         builder.HasOne(x => x.Criterion)
             .WithMany()
             .HasForeignKey(x => x.CriterionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Review)
+            .WithMany(x => x.CriterionResults)
+            .HasForeignKey(x => x.ReviewId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

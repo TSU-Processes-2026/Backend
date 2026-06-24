@@ -16,4 +16,9 @@ public sealed record TeamMutationResult(TeamMutationStatus Status, TeamDistribut
     {
         return new TeamMutationResult(TeamMutationStatus.Invalid, null, errors);
     }
+
+    public static TeamMutationResult NotFound()
+    {
+        return new TeamMutationResult(TeamMutationStatus.NotFound, null, Array.Empty<string>());
+    }
 }
