@@ -1,5 +1,6 @@
 using Application.Reviews.Contracts;
 using Application.Reviews.Models;
+using Application.Teams.Contracts;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -9,18 +10,23 @@ namespace Infrastructure.Reviews.Services;
 public sealed class ReviewsService : IReviewsService
 {
     private readonly LmsDbContext _dbContext;
+    private readonly ITeamsService _teamsService;
 
-    public ReviewsService(LmsDbContext dbContext)
+    public ReviewsService(LmsDbContext dbContext, ITeamsService teamsService)
     {
         _dbContext = dbContext;
+        _teamsService = teamsService;
     }
 
     public async Task<IReadOnlyList<ReviewAssignmentDto>> GetAssignedReviewsAsync(Guid userId, CancellationToken cancellationToken)
     {
+        await ExpireOverdueAssignments(cancellationToken);
+
         var assignments = await _dbContext.ReviewAssignments
             .Include(x => x.Task)
                 .ThenInclude(t => t.Subject)
             .Include(x => x.Submission)
+                .ThenInclude(s => s.answers)
             .Include(x => x.Reviews)
                 .ThenInclude(r => r.CriterionResults)
             .Where(x => x.ReviewerUserId == userId)
@@ -30,31 +36,41 @@ public sealed class ReviewsService : IReviewsService
         return assignments.Select(MapToDto).ToList();
     }
 
-    public async Task<ReviewAssignmentDto?> StartReviewAsync(Guid userId, Guid assignmentId, CancellationToken cancellationToken)
+    public async Task<ReviewOperationResult<ReviewAssignmentDto>> StartReviewAsync(Guid userId, Guid assignmentId, CancellationToken cancellationToken)
     {
+        await ExpireOverdueAssignments(cancellationToken);
+
         var assignment = await _dbContext.ReviewAssignments
             .Include(x => x.Task)
                 .ThenInclude(t => t.Subject)
             .Include(x => x.Submission)
             .Include(x => x.Reviews)
                 .ThenInclude(r => r.CriterionResults)
-            .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ReviewerUserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == assignmentId, cancellationToken);
 
         if (assignment is null)
-            return null;
+            return ReviewOperationResult<ReviewAssignmentDto>.NotFound();
 
-        if (assignment.Status == "pending")
-        {
-            assignment.Status = "opened";
-            assignment.OpenedAt = DateTimeOffset.UtcNow;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
+        if (!await IsAuthorizedForAssignment(userId, assignment, cancellationToken))
+            return ReviewOperationResult<ReviewAssignmentDto>.Forbidden();
 
-        return MapToDto(assignment);
+        if (assignment.Status == "expired")
+            return ReviewOperationResult<ReviewAssignmentDto>.Expired();
+
+        if (assignment.Status != "pending")
+            return ReviewOperationResult<ReviewAssignmentDto>.InvalidState("Review already started or completed");
+
+        assignment.Status = "opened";
+        assignment.OpenedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return ReviewOperationResult<ReviewAssignmentDto>.Success(MapToDto(assignment));
     }
 
-    public async Task<ReviewAssignmentDto?> SaveDraftAsync(Guid userId, Guid assignmentId, SaveDraftRequest request, CancellationToken cancellationToken)
+    public async Task<ReviewOperationResult<ReviewAssignmentDto>> SaveDraftAsync(Guid userId, Guid assignmentId, SaveDraftRequest request, CancellationToken cancellationToken)
     {
+        await ExpireOverdueAssignments(cancellationToken);
+
         var assignment = await _dbContext.ReviewAssignments
             .Include(x => x.Task)
                 .ThenInclude(t => t.Subject)
@@ -64,10 +80,13 @@ public sealed class ReviewsService : IReviewsService
             .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ReviewerUserId == userId, cancellationToken);
 
         if (assignment is null)
-            return null;
+            return ReviewOperationResult<ReviewAssignmentDto>.NotFound();
 
-        if (assignment.Status != "opened" && assignment.Status != "submitted")
-            return null;
+        if (assignment.Status == "expired")
+            return ReviewOperationResult<ReviewAssignmentDto>.Expired();
+
+        if (assignment.Status == "cancelled")
+            return ReviewOperationResult<ReviewAssignmentDto>.Cancelled();
 
         var existingReview = assignment.Reviews
             .FirstOrDefault(r => r.Source == "peer" && !r.IsFinal);
@@ -112,6 +131,7 @@ public sealed class ReviewsService : IReviewsService
                         CriterionId = criterionResultDto.CriterionId,
                         Value = criterionResultDto.Value,
                         Comment = criterionResultDto.Comment,
+                        AssessmentType = "PEER",
                         CreatedAt = DateTimeOffset.UtcNow
                     };
                     _dbContext.CriterionResults.Add(existingCriterionResult);
@@ -126,24 +146,35 @@ public sealed class ReviewsService : IReviewsService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return MapToDto(assignment);
+        return ReviewOperationResult<ReviewAssignmentDto>.Success(MapToDto(assignment));
     }
 
-    public async Task<ReviewAssignmentDto?> SubmitReviewAsync(Guid userId, Guid assignmentId, SubmitReviewRequest request, CancellationToken cancellationToken)
+    public async Task<ReviewOperationResult<ReviewAssignmentDto>> SubmitReviewAsync(Guid userId, Guid assignmentId, SubmitReviewRequest request, CancellationToken cancellationToken)
     {
+        await ExpireOverdueAssignments(cancellationToken);
+
         var assignment = await _dbContext.ReviewAssignments
             .Include(x => x.Task)
                 .ThenInclude(t => t.Subject)
             .Include(x => x.Submission)
             .Include(x => x.Reviews)
                 .ThenInclude(r => r.CriterionResults)
-            .FirstOrDefaultAsync(x => x.Id == assignmentId && x.ReviewerUserId == userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == assignmentId, cancellationToken);
 
         if (assignment is null)
-            return null;
+            return ReviewOperationResult<ReviewAssignmentDto>.NotFound();
 
-        if (assignment.Status != "opened" && assignment.Status != "submitted")
-            return null;
+        if (!await IsAuthorizedForAssignment(userId, assignment, cancellationToken))
+            return ReviewOperationResult<ReviewAssignmentDto>.Forbidden();
+
+        if (assignment.Status == "expired")
+            return ReviewOperationResult<ReviewAssignmentDto>.Expired();
+
+        if (assignment.Status == "cancelled")
+            return ReviewOperationResult<ReviewAssignmentDto>.Cancelled();
+
+        if (assignment.Status != "opened")
+            return ReviewOperationResult<ReviewAssignmentDto>.InvalidState("Review must be opened first");
 
         var existingReview = assignment.Reviews
             .FirstOrDefault(r => r.Source == "peer" && !r.IsFinal);
@@ -189,6 +220,7 @@ public sealed class ReviewsService : IReviewsService
                         CriterionId = criterionResultDto.CriterionId,
                         Value = criterionResultDto.Value,
                         Comment = criterionResultDto.Comment,
+                        AssessmentType = "PEER",
                         CreatedAt = DateTimeOffset.UtcNow
                     };
                     _dbContext.CriterionResults.Add(existingCriterionResult);
@@ -206,7 +238,7 @@ public sealed class ReviewsService : IReviewsService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return MapToDto(assignment);
+        return ReviewOperationResult<ReviewAssignmentDto>.Success(MapToDto(assignment));
     }
 
     public async Task<SubmissionReviewsDto?> GetSubmissionReviewsAsync(Guid submissionId, CancellationToken cancellationToken)
@@ -366,6 +398,128 @@ public sealed class ReviewsService : IReviewsService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return MapReviewToDto(existingTeacherReview);
+    }
+
+    public async Task<IReadOnlyList<ReviewAssignmentDto>> GetTeamReviewsAsync(Guid teamId, CancellationToken ct)
+    {
+        var assignments = await _dbContext.ReviewAssignments
+            .Include(x => x.Task)
+                .ThenInclude(t => t.Subject)
+            .Include(x => x.Submission)
+            .Include(x => x.Reviews)
+                .ThenInclude(r => r.CriterionResults)
+            .Where(x => x.ReviewerTeamId == teamId)
+            .OrderByDescending(x => x.AssignedAt)
+            .ToListAsync(ct);
+
+        return assignments.Select(MapToDto).ToList();
+    }
+
+    public async Task<ReviewDto?> RejectReviewAsync(Guid teacherId, Guid reviewId, CancellationToken ct)
+    {
+        var review = await _dbContext.Reviews
+            .Include(x => x.Assignment)
+                .ThenInclude(x => x.Task)
+            .SingleOrDefaultAsync(x => x.Id == reviewId, ct);
+
+        if (review is null) return null;
+
+        var subjectId = review.Assignment.Task.SubjectId;
+        var isTeacherOrAdmin = await _dbContext.SubjectParticipants
+            .AnyAsync(x => x.SubjectId == subjectId && x.UserId == teacherId
+                && (x.Role == "Teacher" || x.Role == "Admin"), ct);
+        if (!isTeacherOrAdmin) return null;
+
+        if (review.Source == "teacher") return null;
+
+        review.IsRejected = true;
+        review.IsFinal = false;
+        await _dbContext.SaveChangesAsync(ct);
+
+        return MapReviewToDto(review);
+    }
+
+    public async Task<FinalGradeResponse?> OverrideFinalGradeAsync(Guid teacherId, Guid submissionId,
+        decimal finalScore, string? comment, CancellationToken ct)
+    {
+        var submission = await _dbContext.Submissions
+            .Include(x => x.post)
+            .SingleOrDefaultAsync(x => x.id == submissionId, ct);
+
+        if (submission is null) return null;
+
+        var subjectId = submission.post.SubjectId;
+        var isTeacherOrAdmin = await _dbContext.SubjectParticipants
+            .AnyAsync(x => x.SubjectId == subjectId && x.UserId == teacherId
+                && (x.Role == "Teacher" || x.Role == "Admin"), ct);
+        if (!isTeacherOrAdmin) return null;
+
+        submission.FinalScore = finalScore;
+        submission.FinalSource = "teacher";
+
+        var finalGrade = await _dbContext.FinalGrades
+            .SingleOrDefaultAsync(x => x.SubmissionId == submissionId, ct);
+
+        if (finalGrade is null)
+        {
+            finalGrade = new FinalGrade
+            {
+                Id = Guid.NewGuid(),
+                SubmissionId = submissionId,
+                StudentId = submission.authorId,
+                FinalScore = finalScore,
+                FinalSource = "teacher",
+                TeacherOverrideComment = comment,
+                CalculatedAt = DateTimeOffset.UtcNow
+            };
+            _dbContext.FinalGrades.Add(finalGrade);
+        }
+        else
+        {
+            finalGrade.FinalScore = finalScore;
+            finalGrade.FinalSource = "teacher";
+            finalGrade.TeacherOverrideComment = comment;
+            finalGrade.CalculatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
+
+        return new FinalGradeResponse
+        {
+            Id = finalGrade.Id,
+            SubmissionId = finalGrade.SubmissionId,
+            FinalScore = finalGrade.FinalScore,
+            FinalSource = finalGrade.FinalSource,
+            TeacherOverrideComment = finalGrade.TeacherOverrideComment,
+            CalculatedAt = finalGrade.CalculatedAt
+        };
+    }
+
+    private async Task<bool> IsAuthorizedForAssignment(Guid userId, ReviewAssignment assignment, CancellationToken ct)
+    {
+        if (assignment.ReviewerTeamId is not null)
+        {
+            var task = await _dbContext.Posts
+                .SingleOrDefaultAsync(x => x.Id == assignment.TaskId, ct);
+
+            var policy = task?.TeamReviewPolicy ?? "all_members";
+
+            return await _teamsService.CanMemberReviewAsync(userId, assignment.ReviewerTeamId.Value, policy, ct);
+        }
+
+        return assignment.ReviewerUserId == userId;
+    }
+
+    private async Task ExpireOverdueAssignments(CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var overdue = await _dbContext.ReviewAssignments
+            .Where(x => x.Status != "submitted" && x.Status != "expired" && x.Status != "cancelled" && x.DueAt < now)
+            .ToListAsync(ct);
+        foreach (var assignment in overdue)
+            assignment.Status = "expired";
+        if (overdue.Count > 0)
+            await _dbContext.SaveChangesAsync(ct);
     }
 
     private static ReviewAssignmentDto MapToDto(ReviewAssignment assignment)
