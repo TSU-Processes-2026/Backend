@@ -347,12 +347,19 @@ public class SubmissionsService : ISubmissionsService
 
     private static bool SelfAssessmentsAreValid(Post task, IReadOnlyList<Criterion> criteria, IReadOnlyList<SelfAssessmentRequest>? selfAssessments)
     {
+        var selfAssessmentEnabled = task.SelfAssessmentEnabled ?? task.Subject.SelfAssessmentEnabled;
+
         if (task.SelfAssessmentVisibilityDate.HasValue && DateTimeOffset.UtcNow < task.SelfAssessmentVisibilityDate.Value)
         {
             return false;
         }
 
         if (task.DeadLine.HasValue && DateTimeOffset.UtcNow < task.DeadLine.Value.AddDays(-1))
+        {
+            return false;
+        }
+
+        if (selfAssessmentEnabled && !task.SelfAssessmentVisibilityDate.HasValue && !task.DeadLine.HasValue)
         {
             return false;
         }
@@ -369,12 +376,19 @@ public class SubmissionsService : ISubmissionsService
 
     private static bool StoredSelfAssessmentsAreComplete(Submission submission, IReadOnlyList<Criterion> criteria)
     {
+        var selfAssessmentEnabled = submission.post.SelfAssessmentEnabled ?? submission.post.Subject.SelfAssessmentEnabled;
+
         if (submission.post.SelfAssessmentVisibilityDate.HasValue && DateTimeOffset.UtcNow < submission.post.SelfAssessmentVisibilityDate.Value)
         {
             return false;
         }
 
         if (submission.post.DeadLine.HasValue && DateTimeOffset.UtcNow < submission.post.DeadLine.Value.AddDays(-1))
+        {
+            return false;
+        }
+
+        if (selfAssessmentEnabled && !submission.post.SelfAssessmentVisibilityDate.HasValue && !submission.post.DeadLine.HasValue)
         {
             return false;
         }

@@ -57,9 +57,11 @@ public sealed class CriteriaService : ICriteriaService
         var selfAssessmentEnabled = task.SelfAssessmentEnabled ?? task.Subject.SelfAssessmentEnabled;
         var now = _timeProvider.GetUtcNow();
         var beforeOneDay = selfAssessmentEnabled && task.DeadLine.HasValue && now < task.DeadLine.Value.AddDays(-1);
+        var noDatesConfigured = selfAssessmentEnabled && !task.SelfAssessmentVisibilityDate.HasValue && !task.DeadLine.HasValue;
         var hidden = isStudent && selfAssessmentEnabled && (
             (task.SelfAssessmentVisibilityDate.HasValue && now < task.SelfAssessmentVisibilityDate.Value)
             || beforeOneDay
+            || noDatesConfigured
         );
 
         if (hidden)
