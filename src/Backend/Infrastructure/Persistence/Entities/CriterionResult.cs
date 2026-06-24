@@ -11,6 +11,7 @@ public sealed class CriterionResult
     public string AssessmentType { get; set; } = string.Empty;
     
     public Guid? ReviewId { get; set; }
+    public decimal? ComputedValue { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     
     public Submission Submission { get; set; } = null!;

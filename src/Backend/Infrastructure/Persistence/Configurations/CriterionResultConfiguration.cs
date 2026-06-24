@@ -29,6 +29,10 @@ public sealed class CriterionResultConfiguration : IEntityTypeConfiguration<Crit
             .IsRequired()
             .HasMaxLength(20);
 
+        builder.Property(x => x.ComputedValue)
+            .HasColumnType("decimal(10,2)")
+            .IsRequired(false);
+
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 

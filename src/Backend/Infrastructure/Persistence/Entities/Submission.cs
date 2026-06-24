@@ -19,6 +19,12 @@ namespace Infrastructure.Persistence.Entities
         public SubmissionStatusEnum status { get; set; }
 
         public DateTime submittedAt { get; set; }
+        public string? SubmissionType { get; set; }
+        public string? ReviewStatus { get; set; }
+        public decimal? FinalScore { get; set; }
+        public string? FinalSource { get; set; }
+        public DateTimeOffset? LockedAt { get; set; }
+        public int? DefenseOrder { get; set; }
         [JsonIgnore]
         public Grade grade { get; set; }
         [JsonIgnore]

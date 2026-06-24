@@ -155,6 +155,14 @@ public sealed class PostsService : IPostsService
         }
 
         post.Content = request.Content ?? post.Content;
+        post.ReviewEnabled = request.ReviewEnabled ?? post.ReviewEnabled;
+        post.ReviewType = request.ReviewType ?? post.ReviewType;
+        post.ReviewMode = request.ReviewMode ?? post.ReviewMode;
+        post.ReviewDeadlineAt = request.ReviewDeadlineAt ?? post.ReviewDeadlineAt;
+        post.ReviewTimeLimitMinutes = request.ReviewTimeLimitMinutes ?? post.ReviewTimeLimitMinutes;
+        post.CriteriaVisibilityAt = request.CriteriaVisibilityAt ?? post.CriteriaVisibilityAt;
+        post.TeacherCanEditPeerScores = request.TeacherCanEditPeerScores ?? post.TeacherCanEditPeerScores;
+        post.TeamReviewPolicy = request.TeamReviewPolicy ?? post.TeamReviewPolicy;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return PostUpdateResult.Success(MapPost(post));
@@ -320,7 +328,15 @@ public sealed class PostsService : IPostsService
                 AuthorId = post.AuthorId,
                 PostType = AnnouncementPostType,
                 Content = post.Content,
-                CreatedAt = post.CreatedAt
+                CreatedAt = post.CreatedAt,
+                ReviewEnabled = post.ReviewEnabled,
+                ReviewType = post.ReviewType,
+                ReviewMode = post.ReviewMode,
+                ReviewDeadlineAt = post.ReviewDeadlineAt,
+                ReviewTimeLimitMinutes = post.ReviewTimeLimitMinutes,
+                CriteriaVisibilityAt = post.CriteriaVisibilityAt,
+                TeacherCanEditPeerScores = post.TeacherCanEditPeerScores,
+                TeamReviewPolicy = post.TeamReviewPolicy
             };
         }
 
@@ -336,7 +352,15 @@ public sealed class PostsService : IPostsService
                 FileName = post.FileName ?? string.Empty,
                 StoragePath = post.StoragePath ?? string.Empty,
                 FileSize = post.FileSize ?? 0,
-                DownloadUrl = $"/api/posts/{post.Id}/file"
+                DownloadUrl = $"/api/posts/{post.Id}/file",
+                ReviewEnabled = post.ReviewEnabled,
+                ReviewType = post.ReviewType,
+                ReviewMode = post.ReviewMode,
+                ReviewDeadlineAt = post.ReviewDeadlineAt,
+                ReviewTimeLimitMinutes = post.ReviewTimeLimitMinutes,
+                CriteriaVisibilityAt = post.CriteriaVisibilityAt,
+                TeacherCanEditPeerScores = post.TeacherCanEditPeerScores,
+                TeamReviewPolicy = post.TeamReviewPolicy
             };
         }
 
@@ -367,7 +391,15 @@ public sealed class PostsService : IPostsService
                             })
                             .ToList()
                     })
-                    .ToList()
+                    .ToList(),
+                ReviewEnabled = post.ReviewEnabled,
+                ReviewType = post.ReviewType,
+                ReviewMode = post.ReviewMode,
+                ReviewDeadlineAt = post.ReviewDeadlineAt,
+                ReviewTimeLimitMinutes = post.ReviewTimeLimitMinutes,
+                CriteriaVisibilityAt = post.CriteriaVisibilityAt,
+                TeacherCanEditPeerScores = post.TeacherCanEditPeerScores,
+                TeamReviewPolicy = post.TeamReviewPolicy
             };
         }
 

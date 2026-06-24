@@ -31,6 +31,38 @@ public sealed class SubjectConfiguration : IEntityTypeConfiguration<Subject>
         builder.Property(x => x.FinalGradeScaleId)
             .IsRequired(false);
 
+        builder.Property(x => x.PeerReviewEnabled)
+            .IsRequired();
+
+        builder.Property(x => x.PeerReviewScope)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.PeerReviewMode)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.PeerReviewDeadlinePolicy)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.TeacherFinalMode)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.PairingStrategy)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.ShowCriteriaBeforeDeadline)
+            .IsRequired();
+
+        builder.Property(x => x.LiveReviewMode)
+            .IsRequired();
+
+        builder.Property(x => x.DefaultReviewTimeLimitMinutes)
+            .IsRequired(false);
+
         builder.HasMany(x => x.Participants)
             .WithOne(x => x.Subject)
             .HasForeignKey(x => x.SubjectId)

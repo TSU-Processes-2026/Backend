@@ -40,6 +40,7 @@ public sealed class LmsDbContext : IdentityDbContext<ApplicationUser, IdentityRo
     public DbSet<CourseGrade> CourseGrades => Set<CourseGrade>();
     public DbSet<ReviewAssignment> ReviewAssignments => Set<ReviewAssignment>();
     public DbSet<Review> Reviews => Set<Review>();
+    public DbSet<FinalGrade> FinalGrades => Set<FinalGrade>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

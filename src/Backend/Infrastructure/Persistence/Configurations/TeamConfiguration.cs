@@ -42,6 +42,13 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.Property(x => x.RepresentativeAssignedAt)
             .IsRequired(false);
 
+        builder.Property(x => x.TeamSize)
+            .IsRequired(false);
+
+        builder.Property(x => x.ReviewParticipationPolicy)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
         builder.HasOne(x => x.Subject)
             .WithMany()
             .HasForeignKey(x => x.SubjectId)

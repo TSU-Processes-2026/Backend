@@ -41,6 +41,33 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(x => x.DeadLine)
             .IsRequired(false);
 
+        builder.Property(x => x.ReviewEnabled)
+            .IsRequired();
+
+        builder.Property(x => x.ReviewType)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.ReviewMode)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
+        builder.Property(x => x.ReviewDeadlineAt)
+            .IsRequired(false);
+
+        builder.Property(x => x.ReviewTimeLimitMinutes)
+            .IsRequired(false);
+
+        builder.Property(x => x.CriteriaVisibilityAt)
+            .IsRequired(false);
+
+        builder.Property(x => x.TeacherCanEditPeerScores)
+            .IsRequired();
+
+        builder.Property(x => x.TeamReviewPolicy)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
         builder.HasOne(x => x.Subject)
             .WithMany(x => x.Posts)
             .HasForeignKey(x => x.SubjectId)

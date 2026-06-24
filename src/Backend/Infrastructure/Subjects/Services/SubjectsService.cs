@@ -69,7 +69,16 @@ public sealed class SubjectsService : ISubjectsService
                 Description = x.Subject.Description,
                 GradingMode = x.Subject.GradingMode,
                 SelfAssessmentEnabled = x.Subject.SelfAssessmentEnabled,
-                FinalGradeScaleId = x.Subject.FinalGradeScaleId
+                FinalGradeScaleId = x.Subject.FinalGradeScaleId,
+                PeerReviewEnabled = x.Subject.PeerReviewEnabled,
+                PeerReviewScope = x.Subject.PeerReviewScope,
+                PeerReviewMode = x.Subject.PeerReviewMode,
+                PeerReviewDeadlinePolicy = x.Subject.PeerReviewDeadlinePolicy,
+                TeacherFinalMode = x.Subject.TeacherFinalMode,
+                PairingStrategy = x.Subject.PairingStrategy,
+                ShowCriteriaBeforeDeadline = x.Subject.ShowCriteriaBeforeDeadline,
+                LiveReviewMode = x.Subject.LiveReviewMode,
+                DefaultReviewTimeLimitMinutes = x.Subject.DefaultReviewTimeLimitMinutes
             })
             .ToListAsync(cancellationToken);
     }
@@ -117,6 +126,15 @@ public sealed class SubjectsService : ISubjectsService
         subject.GradingMode = IsSupportedGradingMode(request.GradingMode) ? request.GradingMode! : subject.GradingMode;
         subject.SelfAssessmentEnabled = request.SelfAssessmentEnabled ?? subject.SelfAssessmentEnabled;
         subject.FinalGradeScaleId = request.FinalGradeScaleId ?? subject.FinalGradeScaleId;
+        subject.PeerReviewEnabled = request.PeerReviewEnabled ?? subject.PeerReviewEnabled;
+        subject.PeerReviewScope = request.PeerReviewScope ?? subject.PeerReviewScope;
+        subject.PeerReviewMode = request.PeerReviewMode ?? subject.PeerReviewMode;
+        subject.PeerReviewDeadlinePolicy = request.PeerReviewDeadlinePolicy ?? subject.PeerReviewDeadlinePolicy;
+        subject.TeacherFinalMode = request.TeacherFinalMode ?? subject.TeacherFinalMode;
+        subject.PairingStrategy = request.PairingStrategy ?? subject.PairingStrategy;
+        subject.ShowCriteriaBeforeDeadline = request.ShowCriteriaBeforeDeadline ?? subject.ShowCriteriaBeforeDeadline;
+        subject.LiveReviewMode = request.LiveReviewMode ?? subject.LiveReviewMode;
+        subject.DefaultReviewTimeLimitMinutes = request.DefaultReviewTimeLimitMinutes ?? subject.DefaultReviewTimeLimitMinutes;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -361,7 +379,16 @@ public sealed class SubjectsService : ISubjectsService
             Description = subject.Description,
             GradingMode = subject.GradingMode,
             SelfAssessmentEnabled = subject.SelfAssessmentEnabled,
-            FinalGradeScaleId = subject.FinalGradeScaleId
+            FinalGradeScaleId = subject.FinalGradeScaleId,
+            PeerReviewEnabled = subject.PeerReviewEnabled,
+            PeerReviewScope = subject.PeerReviewScope,
+            PeerReviewMode = subject.PeerReviewMode,
+            PeerReviewDeadlinePolicy = subject.PeerReviewDeadlinePolicy,
+            TeacherFinalMode = subject.TeacherFinalMode,
+            PairingStrategy = subject.PairingStrategy,
+            ShowCriteriaBeforeDeadline = subject.ShowCriteriaBeforeDeadline,
+            LiveReviewMode = subject.LiveReviewMode,
+            DefaultReviewTimeLimitMinutes = subject.DefaultReviewTimeLimitMinutes
         };
     }
 

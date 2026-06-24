@@ -14,6 +14,8 @@ public sealed class Team
     public DateTimeOffset? CaptainSelectedAt { get; set; }
     public Guid? RepresentativeUserId { get; set; }
     public DateTimeOffset? RepresentativeAssignedAt { get; set; }
+    public int? TeamSize { get; set; }
+    public string? ReviewParticipationPolicy { get; set; }
 
     public Subject Subject { get; set; } = null!;
     public ApplicationUser? Captain { get; set; }

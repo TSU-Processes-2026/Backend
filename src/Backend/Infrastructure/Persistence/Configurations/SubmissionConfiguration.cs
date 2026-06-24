@@ -27,6 +27,28 @@ namespace Infrastructure.Persistence.Configurations
             builder.Property(x => x.submittedAt)
                 .IsRequired();
 
+            builder.Property(x => x.SubmissionType)
+                .HasMaxLength(20)
+                .IsRequired(false);
+
+            builder.Property(x => x.ReviewStatus)
+                .HasMaxLength(20)
+                .IsRequired(false);
+
+            builder.Property(x => x.FinalScore)
+                .HasColumnType("decimal(10,2)")
+                .IsRequired(false);
+
+            builder.Property(x => x.FinalSource)
+                .HasMaxLength(20)
+                .IsRequired(false);
+
+            builder.Property(x => x.LockedAt)
+                .IsRequired(false);
+
+            builder.Property(x => x.DefenseOrder)
+                .IsRequired(false);
+
             builder.HasMany(x => x.answers)
                 .WithOne()
                 .HasForeignKey("submissionId")
